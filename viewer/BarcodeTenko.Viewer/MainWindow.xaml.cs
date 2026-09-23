@@ -499,7 +499,12 @@ public partial class MainWindow : Window
 
     private void ReplaceServerRows(List<AttendanceRow> scans)
     {
-        var rows = scans.Select(scan => CreateRow(scan, false)).ToList();
+        var rows = scans.Select(scan =>
+        {
+            var row = CreateRow(scan, false);
+            ApplyRoster(row);
+            return row;
+        }).ToList();
         _allRows = rows;
         RenderRows(reset: true);
     }
