@@ -186,6 +186,75 @@ router.delete('/sessions/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+router.get('/sessions/:id/csv', (req, res) => {
+  const id = Number(req.params.id);
+  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
+  if (!session) return res.status(404).send('Session not found');
+
+  const rows = db
+    .prepare(
+      `SELECT a.id, a.student_number, l.name AS location_name, s.name AS session_name,
+              a.received_at, a.deleted, a.deleted_at
+         FROM attendance a
+         LEFT JOIN locations l ON l.id = a.location_id
+         LEFT JOIN sessions  s ON s.id = a.session_id
+        WHERE a.session_id = ?
+        ORDER BY a.id ASC`
+    )
+    .all(id);
+
+  function formatJst(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      const y = jst.getUTCFullYear();
+      const m = pad(jst.getUTCMonth() + 1);
+      const day = pad(jst.getUTCDate());
+      const h = pad(jst.getUTCHours());
+      const min = pad(jst.getUTCMinutes());
+      const sec = pad(jst.getUTCSeconds());
+      return `${y}-${m}-${day} ${h}:${min}:${sec}`;
+    } catch {
+      return iso;
+    }
+  }
+
+  function csvEscape(val) {
+    if (val === null || val === undefined) return '""';
+    const str = String(val);
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  const header = ['ID', '学籍番号', '点呼場所', 'セッション名', '受付日時', '状態', '取消日時'];
+  const lines = [header.map(csvEscape).join(',')];
+
+  for (const r of rows) {
+    lines.push([
+      r.id,
+      r.student_number,
+      csvEscape(r.location_name || '場所未選択'),
+      csvEscape(r.session_name || session.name),
+      csvEscape(formatJst(r.received_at)),
+      csvEscape(r.deleted ? '取消' : '有効'),
+      csvEscape(formatJst(r.deleted_at))
+    ].join(','));
+  }
+
+  const bom = '\uFEFF';
+  const csvContent = bom + lines.join('\r\n') + '\r\n';
+
+  const safeName = session.name.replace(/[/\\?%*:|"<>]/g, '_');
+  const filename = `session_${session.id}_${safeName}.csv`;
+  const encodedFilename = encodeURIComponent(filename);
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`);
+  res.send(csvContent);
+});
+
 // --- スキャン一覧 ---
 router.get('/scans', (req, res) => {
   const includeDeleted = req.query.includeDeleted === '1' || req.query.includeDeleted === 'true';

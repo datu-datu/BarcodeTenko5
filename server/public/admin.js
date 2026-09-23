@@ -112,6 +112,7 @@
         (s.status !== 'open'
           ? `<button class="small primary" data-open="${s.id}">開始</button>`
           : `<button class="small" data-close="${s.id}">終了</button>`) +
+        `<button class="small" data-csv="${s.id}" title="生ログCSVダウンロード">CSV</button>` +
         `<button class="small" data-edit="${s.id}">編集</button>` +
         `<button class="small danger" data-del="${s.id}">削除</button>`;
       tr.appendChild(actions);
@@ -134,6 +135,11 @@
       b.addEventListener('click', async () => {
         await api(`/sessions/${b.dataset.close}/close`, { method: 'POST' });
         await refreshAll();
+      })
+    );
+    tbody.querySelectorAll('[data-csv]').forEach((b) =>
+      b.addEventListener('click', () => {
+        window.location.href = `/admin/api/sessions/${b.dataset.csv}/csv`;
       })
     );
     tbody.querySelectorAll('[data-edit]').forEach((b) =>
