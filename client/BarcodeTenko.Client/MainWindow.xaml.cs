@@ -230,7 +230,7 @@ public partial class MainWindow : Window
 
     private void UpdateTotalText()
     {
-        TotalCountText.Text = _store.CountDistinctStudents().ToString();
+        TotalCountText.Text = _store.CountPending().ToString();
     }
 
     /// <summary>
@@ -351,7 +351,7 @@ public partial class MainWindow : Window
                 var res = MessageBox.Show(
                     $"サーバーへ未送信のデータが {unsent} 件あります。\n\n" +
                     "「はい」: 再試行（Wi-Fi接続を確認した後に押してください）\n" +
-                    "「いいえ」: 提出用ファイルは問題ないので「はい」を押してもこの画面が繰り返されたなら「いいえ」で大丈夫です。\n" +
+                    "「いいえ」: もし「はい」を押してもこの画面が繰り返されたなら「いいえ」でも大丈夫です。\n" +
                     "「キャンセル」: 完了処理を中断",
                     "未送信データがあります",
                     MessageBoxButton.YesNoCancel,
@@ -386,10 +386,11 @@ public partial class MainWindow : Window
             RewriteLiveBin();
             var path = BinWriter.FinalizeLive(_config.DataDirectory, _config.OutputDirectory, _location.Name);
             _store.MarkCompleted(pending.Select(r => r.Id), path);
+            SetLastScan("受付中", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();
             UpdateSyncText();
             BinWriter.RevealInExplorer(path);
-            MessageBox.Show($"{pending.Count} 件を確定しました。\n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"ありがとうございます。このファイルを提出してください。 \n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {

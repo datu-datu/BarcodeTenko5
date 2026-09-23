@@ -203,6 +203,15 @@ CREATE TABLE IF NOT EXISTS app_settings (
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
+    /// <summary>未確定（出力待ち・履歴表示対象）の点呼件数</summary>
+    public int CountPending()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM scans WHERE completed = 0";
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
     /// <summary>累計の点呼済み人数 (学籍番号の重複は除く)</summary>
     public int CountDistinctStudents()
     {
