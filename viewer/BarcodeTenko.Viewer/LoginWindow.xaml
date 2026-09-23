@@ -1,0 +1,26 @@
+<Window x:Class="BarcodeTenko.Viewer.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="管理者ログイン" Width="360" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{StaticResource BackgroundBrush}"
+        FontFamily="Yu Gothic UI, Meiryo">
+    <StackPanel Margin="16">
+        <TextBlock Text="サーバーの管理画面と連携するため、管理者パスワードを入力してください"
+                   FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
+                   Foreground="{StaticResource TextPrimaryBrush}"/>
+
+        <PasswordBox x:Name="PasswordBox" Height="28" Margin="0,0,0,6"
+                     PasswordChanged="PasswordBox_Changed"/>
+
+        <TextBlock x:Name="ErrorText" FontSize="11" TextWrapping="Wrap" MinHeight="16"
+                   Margin="0,0,0,8" Foreground="{StaticResource DangerBrush}"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelButton" Content="キャンセル" Style="{StaticResource ModernButton}"
+                    Width="80" Height="26" Margin="0,0,8,0" IsCancel="True" Click="Cancel_Click"/>
+            <Button x:Name="LoginButton" Content="ログイン" Style="{StaticResource ModernButton}"
+                    Width="80" Height="26" IsDefault="True" Click="Login_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

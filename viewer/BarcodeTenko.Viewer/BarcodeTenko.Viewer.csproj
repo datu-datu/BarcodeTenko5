@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>BarcodeTenkoViewer</AssemblyName>
+    <RootNamespace>BarcodeTenko.Viewer</RootNamespace>
+    <Version>1.0.0</Version>
+    <SatelliteResourceLanguages>ja</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 既定値をアセンブリに埋め込み、appsettings.json がなくても動作するようにする -->
+    <EmbeddedResource Include="appsettings.json" />
+    <EmbeddedResource Include="Roster.csv" LogicalName="BarcodeTenko.Viewer.Roster.csv" />
+    <!-- 配置先に appsettings.json がある場合はそちらで上書きできるようにする -->
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
