@@ -58,6 +58,8 @@ public sealed class ViewerRow : INotifyPropertyChanged
         set => SetField(ref _isRecentlyAdded, value);
     }
 
+    public DateTime HighlightUntil { get; set; }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public void CopyFrom(ViewerRow other)
@@ -68,6 +70,7 @@ public sealed class ViewerRow : INotifyPropertyChanged
         ClassName = other.ClassName;
         Name = other.Name;
         IsRecentlyAdded = other.IsRecentlyAdded;
+        HighlightUntil = other.HighlightUntil;
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

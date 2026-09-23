@@ -18,9 +18,12 @@ public partial class MainWindow : Window
         File
     }
 
+    private static readonly TimeSpan HighlightDuration = TimeSpan.FromSeconds(5);
+
     private readonly ViewerConfig _config;
     private readonly ViewerApiClient _api;
     private readonly ObservableCollection<ViewerRow> _rows = new();
+    private readonly DispatcherTimer _highlightTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     private Dictionary<int, RosterEntry> _rosterByNumber = new();
     private List<ViewerRow> _allRows = new();
@@ -45,6 +48,8 @@ public partial class MainWindow : Window
         _api = api;
         SetRoster(roster, _rosterName);
         ScanGrid.ItemsSource = _rows;
+        _highlightTimer.Tick += OnHighlightTick;
+        _highlightTimer.Start();
 
         Loaded += OnLoaded;
         Closed += OnClosed;
@@ -522,7 +527,8 @@ public partial class MainWindow : Window
             StudentNumber = scan.StudentNumber,
             TimeText = FormatTime(scan.ReceivedAt),
             LocationName = string.IsNullOrEmpty(scan.LocationName) ? "場所未選択" : scan.LocationName!,
-            IsRecentlyAdded = true
+            IsRecentlyAdded = true,
+            HighlightUntil = DateTime.Now + HighlightDuration
         };
         ApplyRoster(row);
         _allRows.Insert(0, row);
@@ -537,6 +543,18 @@ public partial class MainWindow : Window
         ReconcileRows();
         UpdateSummaryPanel();
         LastUpdatedText.Text = DateTime.Now.ToString("MM/dd HH:mm:ss");
+    }
+
+    private void OnHighlightTick(object? sender, EventArgs e)
+    {
+        var now = DateTime.Now;
+        foreach (var row in _allRows)
+        {
+            if (row.IsRecentlyAdded && now >= row.HighlightUntil)
+            {
+                row.IsRecentlyAdded = false;
+            }
+        }
     }
 
     private static ViewerRow CreateRow(AttendanceRow scan, bool recentlyAdded)
