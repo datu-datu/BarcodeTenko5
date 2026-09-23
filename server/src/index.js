@@ -34,6 +34,7 @@ app.listen(config.port, () => {
   console.log(`  管理画面       : http://localhost:${config.port}/admin`);
   if (!config.clientToken) console.warn('[warn] CLIENT_TOKEN 未設定 - クライアントAPIは認証なしです。');
   if (!config.adminPassword) console.warn('[warn] ADMIN_PASSWORD 未設定 - 管理APIは無効です。');
+  if (!config.sessionSecret) console.warn('[warn] SESSION_SECRET 未設定 - 管理画面は無効です。');
   if (!config.dashboardToken) console.warn('[warn] DASHBOARD_TOKEN 未設定 - ダッシュボードは公開です。');
   if (!config.webhookUrl) console.log('[info] WEBHOOK_URL 未設定 - Webhook転送は無効です。');
 });

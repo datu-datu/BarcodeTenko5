@@ -13,7 +13,7 @@ const config = {
   dbPath: resolveFromRoot(process.env.DB_PATH || './data/tenko.db'),
   clientToken: process.env.CLIENT_TOKEN || '',
   adminPassword: process.env.ADMIN_PASSWORD || '',
-  sessionSecret: process.env.SESSION_SECRET || 'insecure-default-session-secret',
+  sessionSecret: process.env.SESSION_SECRET || '',
   dashboardToken: process.env.DASHBOARD_TOKEN || '',
   webhookUrl: process.env.WEBHOOK_URL || '',
   webhookSecret: process.env.WEBHOOK_SECRET || '',

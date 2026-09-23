@@ -39,6 +39,7 @@ function makeSessionCookie() {
 }
 
 function verifySessionCookie(value) {
+  if (!config.sessionSecret) return false;
   if (!value) return false;
   const idx = value.lastIndexOf('.');
   if (idx < 0) return false;
@@ -60,6 +61,7 @@ function clientAuth(req, res, next) {
 // 管理画面用のCookie認証
 function adminAuth(req, res, next) {
   if (!config.adminPassword) return res.status(503).json({ error: 'admin password is not configured' });
+  if (!config.sessionSecret) return res.status(503).json({ error: 'session secret is not configured' });
   if (verifySessionCookie(req.cookies && req.cookies[SESSION_COOKIE])) return next();
   return res.status(401).json({ error: 'unauthorized' });
 }

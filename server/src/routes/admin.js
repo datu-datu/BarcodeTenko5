@@ -20,6 +20,7 @@ function broadcastSession() {
 // --- 認証 ---
 router.post('/login', async (req, res) => {
   if (!config.adminPassword) return res.status(503).json({ error: 'admin password is not configured' });
+  if (!config.sessionSecret) return res.status(503).json({ error: 'session secret is not configured' });
 
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const rate = auth.checkLoginRateLimit(ip);
@@ -39,9 +40,10 @@ router.post('/login', async (req, res) => {
   }
 
   auth.recordLoginSuccess(ip);
+  const secure = req.secure ? '; Secure' : '';
   res.setHeader(
     'Set-Cookie',
-    `${auth.SESSION_COOKIE}=${auth.makeSessionCookie()}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${auth.SESSION_TTL_MS / 1000}`
+    `${auth.SESSION_COOKIE}=${auth.makeSessionCookie()}; HttpOnly; Path=/; SameSite=Lax${secure}; Max-Age=${auth.SESSION_TTL_MS / 1000}`
   );
   res.json({ ok: true });
 });
