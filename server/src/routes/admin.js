@@ -76,6 +76,12 @@ router.post('/webhook/flush', async (req, res) => {
   res.json({ ...result, ...webhook.status() });
 });
 
+router.get('/webhook/logs', (req, res) => {
+  const limit = req.query.limit ? Number(req.query.limit) : 50;
+  res.json(webhook.getLogs(limit));
+});
+
+
 // --- 点呼場所 ---
 router.get('/locations', (req, res) => {
   res.json(db.prepare('SELECT * FROM locations ORDER BY sort, id').all());

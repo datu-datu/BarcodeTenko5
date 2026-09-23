@@ -268,6 +268,40 @@
   });
 
   // --- Power Automate (Webhook) ---
+  async function loadWebhookLogs() {
+    try {
+      const logs = await api('/webhook/logs?limit=50');
+      const tbody = el('webhookLogTable').querySelector('tbody');
+      tbody.innerHTML = '';
+      if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center; padding:12px;">履歴はありません</td></tr>';
+        return;
+      }
+      for (const log of logs) {
+        const tr = document.createElement('tr');
+        const isSuccess = log.status === 'success';
+        const statusBadge = isSuccess
+          ? `<span class="badge open">成功 ${log.http_status ? '(' + log.http_status + ')' : ''}</span>`
+          : `<span class="badge deleted">失敗 ${log.http_status ? '(' + log.http_status + ')' : ''}</span>`;
+        const triggerLabel = log.trigger_type === 'manual' ? '手動' : '自動';
+        const detail = isSuccess
+          ? escapeHtml(log.student_numbers || '-')
+          : `<span style="color:var(--bad)">${escapeHtml(log.error_message || '不明なエラー')}</span>${log.student_numbers ? ` (対象: ${escapeHtml(log.student_numbers)})` : ''}`;
+
+        tr.innerHTML =
+          `<td class="muted">${fmtTime(log.sent_at)}</td>` +
+          `<td>${triggerLabel}</td>` +
+          `<td>${statusBadge}</td>` +
+          `<td class="num">${log.record_count}</td>` +
+          `<td class="num">${log.response_ms != null ? log.response_ms + 'ms' : '—'}</td>` +
+          `<td style="word-break: break-all; font-size: 12px;">${detail}</td>`;
+        tbody.appendChild(tr);
+      }
+    } catch {
+      // ログ読み込み失敗時は無視
+    }
+  }
+
   async function loadWebhook() {
     const w = await api('/webhook');
     el('webhookEnabled').checked = w.enabled;
@@ -279,6 +313,7 @@
       `最終送信: ${w.lastSentAt ? fmtTime(w.lastSentAt) : '—'}` +
       (w.lastError ? ` / エラー: ${w.lastError}` : '') +
       ` (${w.batchSize}件または${Math.round(w.idleMs / 1000)}秒経過でまとめ送信)`;
+    await loadWebhookLogs();
   }
 
   el('webhookEnabled').addEventListener('change', async () => {
@@ -290,6 +325,10 @@
     const result = await api('/webhook/flush', { method: 'POST' });
     alert(`送信しました: ${result.sent} 件`);
     await loadWebhook();
+  });
+
+  el('webhookLogsRefresh').addEventListener('click', async () => {
+    await loadWebhookLogs();
   });
 
   async function refreshAll() {

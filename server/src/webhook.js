@@ -95,6 +95,7 @@ async function sendBatch(records) {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
+  const startMs = Date.now();
   try {
     const resp = await fetch(config.webhookUrl, {
       method: 'POST',
@@ -102,27 +103,88 @@ async function sendBatch(records) {
       body: JSON.stringify(payload),
       signal: controller.signal
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const responseMs = Date.now() - startMs;
+    if (!resp.ok) {
+      const err = new Error(`HTTP ${resp.status}`);
+      err.httpStatus = resp.status;
+      err.responseMs = responseMs;
+      throw err;
+    }
+    return { httpStatus: resp.status, responseMs };
+  } catch (err) {
+    if (!err.responseMs) {
+      err.responseMs = Date.now() - startMs;
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
 }
 
+function recordLog({ triggerType, recordCount, status, httpStatus, responseMs, errorMessage, studentNumbers }) {
+  try {
+    db.prepare(`
+      INSERT INTO webhook_logs (sent_at, trigger_type, record_count, status, http_status, response_ms, error_message, student_numbers)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      nowIso(),
+      triggerType,
+      recordCount,
+      status,
+      httpStatus !== undefined ? httpStatus : null,
+      responseMs !== undefined ? responseMs : null,
+      errorMessage || null,
+      studentNumbers || null
+    );
+  } catch (err) {
+    console.error('Failed to insert webhook_log:', err);
+  }
+}
+
+function getLogs(limit = 50) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 500);
+  return db.prepare('SELECT * FROM webhook_logs ORDER BY id DESC LIMIT ?').all(safeLimit);
+}
+
 // 1 バッチ(最大 BATCH_SIZE 件)を 1 Webhook として送る
-async function sendOneBatch() {
+async function sendOneBatch(triggerType = 'auto') {
   if (!config.webhookUrl) return 0;
   const records = getUnsent(config.webhookBatchSize);
   if (records.length === 0) return 0;
 
+  const studentNumbers = records.map((r) => r.student_number).join(', ');
   try {
-    await sendBatch(records);
+    const { httpStatus, responseMs } = await sendBatch(records);
     markSent(records.map((r) => r.id));
     lastResult.lastSentAt = nowIso();
     lastResult.lastError = null;
+
+    recordLog({
+      triggerType,
+      recordCount: records.length,
+      status: 'success',
+      httpStatus,
+      responseMs,
+      errorMessage: null,
+      studentNumbers
+    });
+
     return records.length;
   } catch (err) {
     retryAt = Date.now() + 5000;
-    lastResult.lastError = String(err && err.message ? err.message : err);
+    const msg = String(err && err.message ? err.message : err);
+    lastResult.lastError = msg;
+
+    recordLog({
+      triggerType,
+      recordCount: records.length,
+      status: 'failure',
+      httpStatus: err.httpStatus || null,
+      responseMs: err.responseMs || null,
+      errorMessage: msg,
+      studentNumbers
+    });
+
     return 0;
   }
 }
@@ -136,7 +198,7 @@ async function flushAll(maxBatches = 200) {
   let sent = 0;
   try {
     for (let i = 0; i < maxBatches; i++) {
-      const count = await sendOneBatch();
+      const count = await sendOneBatch('manual');
       if (count === 0) break;
       sent += count;
       if (count < config.webhookBatchSize) break;
@@ -159,7 +221,7 @@ async function tick() {
   if (total >= config.webhookBatchSize) {
     sending = true;
     try {
-      await sendOneBatch();
+      await sendOneBatch('auto');
     } finally {
       sending = false;
     }
@@ -170,7 +232,7 @@ async function tick() {
   if (last && Date.now() - Date.parse(last) >= config.webhookIdleMs) {
     sending = true;
     try {
-      await sendOneBatch();
+      await sendOneBatch('auto');
     } finally {
       sending = false;
     }
@@ -193,4 +255,4 @@ function start() {
   setInterval(() => tick().catch(() => {}), 1000).unref();
 }
 
-module.exports = { start, isEnabled, setEnabled, pendingCount, flushAll, status, tick };
+module.exports = { start, isEnabled, setEnabled, pendingCount, flushAll, status, tick, getLogs, recordLog };

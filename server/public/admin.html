@@ -78,7 +78,25 @@
         <span id="webhookPending" class="muted"></span>
         <span id="webhookUrlState" class="muted"></span>
       </div>
-      <div id="webhookInfo" class="muted"></div>
+      <div id="webhookInfo" class="muted" style="margin-bottom: 14px;"></div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin: 16px 0 8px;">
+        <h3 style="font-size: 13px; margin: 0; color: var(--muted);">送信履歴 (最新50件)</h3>
+        <button id="webhookLogsRefresh" class="small" type="button">更新</button>
+      </div>
+      <table id="webhookLogTable">
+        <thead>
+          <tr>
+            <th>送信時刻</th>
+            <th>種別</th>
+            <th>結果</th>
+            <th class="num">件数</th>
+            <th class="num">応答時間</th>
+            <th>対象学籍番号 / エラー詳細</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
 
     <section class="panel">

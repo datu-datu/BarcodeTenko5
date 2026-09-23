@@ -50,6 +50,20 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS webhook_logs (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  sent_at         TEXT    NOT NULL,
+  trigger_type    TEXT    NOT NULL,   -- 'auto' | 'manual'
+  record_count    INTEGER NOT NULL,
+  status          TEXT    NOT NULL,   -- 'success' | 'failure'
+  http_status     INTEGER,
+  response_ms     INTEGER,
+  error_message   TEXT,
+  student_numbers TEXT                -- 送信した学籍番号のカンマ区切り (例: "101, 102, 103")
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_sent_at ON webhook_logs(sent_at DESC);
+
 `);
 
 // 既存DBへの後方互換マイグレーション
