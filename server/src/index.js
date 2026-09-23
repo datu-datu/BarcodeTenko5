@@ -7,6 +7,9 @@ const config = require('./config');
 const auth = require('./auth');
 const webhook = require('./webhook');
 
+// Caddy は同一ホストから 127.0.0.1:8080 へ転送するため、ループバックのみで待ち受ける
+const HOST = '127.0.0.1';
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -28,8 +31,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'internal server error' });
 });
 
-app.listen(config.port, () => {
-  console.log(`BarcodeTenko server listening on http://0.0.0.0:${config.port}`);
+app.listen(config.port, HOST, () => {
+  console.log(`BarcodeTenko server listening on http://${HOST}:${config.port}`);
   console.log(`  ダッシュボード : http://localhost:${config.port}/`);
   console.log(`  管理画面       : http://localhost:${config.port}/admin`);
   if (!config.clientToken) console.warn('[warn] CLIENT_TOKEN 未設定 - クライアントAPIは認証なしです。');

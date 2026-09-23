@@ -133,7 +133,7 @@ systemctl status barcode-tenko --no-pager
 journalctl -u barcode-tenko -n 30 --no-pager
 ```
 
-`BarcodeTenko server listening on http://0.0.0.0:8080` と、続くダッシュボード / 管理画面の URL がログに出れば起動成功です。
+`BarcodeTenko server listening on http://127.0.0.1:8080` と、続くダッシュボード / 管理画面の URL がログに出れば起動成功です。
 
 `systemctl enable` により**サーバー再起動後も自動で起動**し、`Restart=always` により**異常終了時も自動復帰**します。
 
@@ -168,7 +168,7 @@ sudo systemctl reload caddy
 ## 9. ファイアウォール
 
 - **OCI のセキュリティリスト（または ufw）で 80/443 のみ開放**してください。
-- **8080 は開放しないでください。** アプリは `0.0.0.0:8080` で待ち受けますが、外部公開は Caddy 経由のみとするのが前提です。
+- **8080 は開放しないでください。** アプリは `127.0.0.1:8080`（ループバック）でのみ待ち受けるため、外部から直接到達することはありません。公開は Caddy 経由のみです。
 
 ufw を使う場合は、SSH を閉め出さないよう順序に注意してください。
 
