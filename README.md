@@ -102,7 +102,8 @@ npm start
 
 ### OCI へのデプロイ
 
-Ubuntu の VM に Node.js 20+ を入れ、リバースプロキシに Caddy を使うと HTTPS が簡単です。
+Ubuntu の VM に Node.js 22+ を入れ、リバースプロキシに Caddy を使うと HTTPS が簡単です。
+（`better-sqlite3` は v13 で N-API 化され、Node 22 以降の prebuilt バイナリが同梱されます。Node 20 では動きません）
 
 `/etc/caddy/Caddyfile`:
 
