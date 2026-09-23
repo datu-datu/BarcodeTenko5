@@ -6,7 +6,7 @@
         Background="{StaticResource BackgroundBrush}"
         FontFamily="Yu Gothic UI, Meiryo">
     <StackPanel Margin="16">
-        <TextBlock Text="場所を選択" FontSize="12" Margin="0,0,0,6" Foreground="{StaticResource TextPrimaryBrush}"/>
+        <TextBlock Text="点呼場所を選択してください" FontSize="12" Margin="0,0,0,6" Foreground="{StaticResource TextPrimaryBrush}"/>
         <ComboBox x:Name="LocationCombo" Height="28" DisplayMemberPath="Name" Margin="0,0,0,16"/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
