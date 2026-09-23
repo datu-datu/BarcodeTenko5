@@ -46,12 +46,31 @@ public partial class MainWindow : Window
             RefreshRecent();
             UpdateSyncText();
             RewriteLiveBin();
+
+            ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+            var clockTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            clockTimer.Tick += (_, _) =>
+            {
+                ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+            };
+            clockTimer.Start();
         };
 
         Closed += (_, _) =>
         {
             Application.Current.Shutdown();
         };
+    }
+
+    private void SetLastScan(string status, Brush statusColor, string number = "")
+    {
+        LastScanStatusText.Text = status;
+        LastScanStatusText.Foreground = statusColor;
+        LastScanNumberText.Text = number;
+        LastScanNumberText.Foreground = statusColor == ErrorBrush ? ErrorBrush : (Brush)FindResource("TextPrimaryBrush");
     }
 
     private void OnSyncStateChanged()
@@ -97,8 +116,7 @@ public partial class MainWindow : Window
         var studentNumber = CodeNormalizer.Normalize(raw);
         if (studentNumber is null)
         {
-            StatusMessageText.Foreground = ErrorBrush;
-            StatusMessageText.Text = "5桁または10桁の数字を入力してください";
+            SetLastScan("入力エラー", ErrorBrush);
             PlaySound(System.Media.SystemSounds.Exclamation);
             InputBox.Clear();
             InputBox.Focus();
@@ -108,14 +126,19 @@ public partial class MainWindow : Window
         // 2回連続で同一学籍番号が入力された場合はスキップ
         if (studentNumber.Value == _lastStudentNumber)
         {
-            StatusMessageText.Foreground = CancelBrush;
-            StatusMessageText.Text = $"同一の学籍番号が連続したためスキップしました: {studentNumber.Value:D5}";
+            SetLastScan("重複スキップ", CancelBrush, $"{studentNumber.Value:D5}");
             InputBox.Clear();
             InputBox.Focus();
             return;
         }
 
         _lastStudentNumber = studentNumber.Value;
+
+        // 音とUIの更新を最優先
+        PlaySuccessSound();
+        SetLastScan("受付完了", SuccessBrush, $"{studentNumber.Value:D5}");
+        InputBox.Clear();
+        InputBox.Focus();
 
         var scanId = Guid.NewGuid().ToString("N");
         var record = new ScanRecord
@@ -131,12 +154,6 @@ public partial class MainWindow : Window
         _sync.RequestSync();
         RewriteLiveBin();
 
-        StatusMessageText.Foreground = SuccessBrush;
-        StatusMessageText.Text = $"受付: {studentNumber.Value:D5}";
-        PlaySuccessSound();
-
-        InputBox.Clear();
-        InputBox.Focus();
         RefreshRecent(scanId);
         UpdateSyncText();
     }
@@ -152,19 +169,11 @@ public partial class MainWindow : Window
         {
             try
             {
-                // (ピッ / 1768Hz, 70ms ラの音って落ち着くよねー)
                 Console.Beep(1768, 70);
             }
             catch
             {
-                // ビープ音非対応環境ではフォールバック
-                try
-                {
-                    System.Media.SystemSounds.Asterisk.Play();
-                }
-                catch
-                {
-                }
+                PlaySound(System.Media.SystemSounds.Asterisk);
             }
         });
     }
@@ -233,7 +242,7 @@ public partial class MainWindow : Window
         try
         {
             var numbers = _store.GetPendingExport().Select(r => r.StudentNumber).ToList();
-            BinWriter.WriteLive(numbers, _config.OutputDirectory);
+            BinWriter.WriteLive(numbers, _config.DataDirectory);
         }
         catch (Exception ex)
         {
@@ -302,8 +311,7 @@ public partial class MainWindow : Window
 
         _lastStudentNumber = -1;
 
-        StatusMessageText.Foreground = CancelBrush;
-        StatusMessageText.Text = $"取消: {record.StudentNumber:D5}";
+        SetLastScan("取消完了", CancelBrush, $"{record.StudentNumber:D5}");
         RefreshRecent();
         UpdateSyncText();
         InputBox.Focus();
@@ -343,7 +351,7 @@ public partial class MainWindow : Window
                 var res = MessageBox.Show(
                     $"サーバーへ未送信のデータが {unsent} 件あります。\n\n" +
                     "「はい」: 再試行（Wi-Fi接続を確認した後に押してください）\n" +
-                    "「いいえ」: 提出用ファイル（bin）は問題ないのでこの画面が繰り返し表示されたら「いいえ」で大丈夫です。\n" +
+                    "「いいえ」: 提出用ファイルは問題ないので「はい」を押してもこの画面が繰り返されたなら「いいえ」で大丈夫です。\n" +
                     "「キャンセル」: 完了処理を中断",
                     "未送信データがあります",
                     MessageBoxButton.YesNoCancel,
@@ -376,7 +384,7 @@ public partial class MainWindow : Window
         {
             // 念のため作業中 bin を最新化してからリネームする
             RewriteLiveBin();
-            var path = BinWriter.FinalizeLive(_config.OutputDirectory, _location.Name);
+            var path = BinWriter.FinalizeLive(_config.DataDirectory, _config.OutputDirectory, _location.Name);
             _store.MarkCompleted(pending.Select(r => r.Id), path);
             RefreshRecent();
             UpdateSyncText();
@@ -414,9 +422,7 @@ public partial class MainWindow : Window
 
             _lastStudentNumber = -1;
 
-            StatusMessageText.Foreground = CancelBrush;
-            StatusMessageText.Text = "全履歴を削除しました";
-
+            SetLastScan("受付中", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();
             UpdateSyncText();
         }

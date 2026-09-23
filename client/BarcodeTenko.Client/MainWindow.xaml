@@ -15,14 +15,14 @@
         <!-- Top Header -->
         <DockPanel Grid.Row="0" Margin="12,10,12,6">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                <Button x:Name="SettingsButton" Content="設定" Style="{StaticResource ModernButton}" 
+                <Button x:Name="SettingsButton" Content="点呼場所" Style="{StaticResource ModernButton}" 
                         Margin="0,0,6,0" Click="Settings_Click"/>
-                <Button x:Name="OpenBinFolderButton" Content="bin フォルダー" Style="{StaticResource ModernButton}" 
+                <Button x:Name="OpenBinFolderButton" Content="提出データフォルダー" Style="{StaticResource ModernButton}" 
                         Click="OpenBinFolder_Click"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="場所:" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
-                <TextBlock x:Name="LocationText" VerticalAlignment="Center" FontWeight="Bold" FontSize="14"
+                <TextBlock x:Name="LocationText" VerticalAlignment="Center" FontSize="14"
                            Foreground="{StaticResource TextPrimaryBrush}"/>
             </StackPanel>
         </DockPanel>
@@ -63,36 +63,55 @@
             </DockPanel>
 
             <!-- Left Panel: Controls (Row 1, Column 0) -->
-            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
-                <TextBox x:Name="InputBox" Style="{StaticResource ModernTextBox}" 
-                        FontSize="16" Height="30" VerticalContentAlignment="Center"
-                        InputMethod.IsInputMethodEnabled="False"
-                        KeyDown="InputBox_KeyDown"/>
-                
-                <Button x:Name="SubmitButton" Content="決定" Click="Submit_Click"
-                        Style="{StaticResource ModernButton}" Height="28" Margin="0,6,0,0"/>
+            <Grid Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <Separator Margin="0,14"/>
+                <!-- Top: Inputs, Status -->
+                <StackPanel Grid.Row="0">
+                    <TextBox x:Name="InputBox" Style="{StaticResource ModernTextBox}" 
+                            FontSize="16" Height="30" VerticalContentAlignment="Center"
+                            InputMethod.IsInputMethodEnabled="False"
+                            KeyDown="InputBox_KeyDown"/>
+                    
+                    <Button x:Name="SubmitButton" Content="決定" Click="Submit_Click"
+                            Style="{StaticResource ModernButton}" Height="28" Margin="0,6,0,0"/>
 
-                <TextBlock Text="累計" FontSize="12" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
-                <Border Background="#F0F0F0" Padding="10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,0,0,14">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBlock x:Name="TotalCountText" Text="0" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <TextBlock Text=" 件" FontSize="12" VerticalAlignment="Bottom" Margin="4,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <!-- 直前の受付結果（枠なし1行） -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0" Height="24">
+                        <TextBlock x:Name="LastScanStatusText" Text="受付中" FontSize="14" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBlock x:Name="LastScanNumberText" Text="" FontSize="16" FontWeight="Bold"
+                                   FontFamily="Consolas" VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
                     </StackPanel>
-                </Border>
+                </StackPanel>
 
-                <Separator Margin="0,14"/>
+                <!-- Row 1: Spacer -->
 
-                <Button x:Name="CompleteButton" Content="点呼完了" Click="Complete_Click"
-                        Style="{StaticResource ModernButton}" Height="30"/>
+                <!-- Bottom: Total Count & Action Buttons (Row 2) -->
+                <StackPanel Grid.Row="2">
+                    <TextBlock Text="累計" FontSize="12" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <Border Background="#F0F0F0" Padding="10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,0,0,14">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock x:Name="TotalCountText" Text="0" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text=" 件" FontSize="12" VerticalAlignment="Bottom" Margin="4,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
 
-                <Separator Margin="0,20"/>
+                    <Button x:Name="CompleteButton" Content="点呼完了" Click="Complete_Click"
+                            Style="{StaticResource ModernButton}" Height="30"/>
 
-                <Button x:Name="DeleteAllButton" Content="全履歴を削除" Click="DeleteAll_Click"
-                        Style="{StaticResource ModernButton}" Height="26" FontSize="11"
-                        Foreground="{StaticResource DangerBrush}"/>
-            </StackPanel>
+                    <Separator Margin="0,10"/>
+
+                    <Button x:Name="DeleteAllButton" Content="全履歴を削除" Click="DeleteAll_Click"
+                            Style="{StaticResource ModernButton}" Height="26" FontSize="11"
+                            Foreground="{StaticResource DangerBrush}"/>
+                </StackPanel>
+            </Grid>
 
             <!-- Right Panel: DataGrid (Row 1, Column 1) -->
             <DataGrid x:Name="ScanGrid" Grid.Row="1" Grid.Column="1" AutoGenerateColumns="False" 
@@ -135,14 +154,24 @@
 
         <!-- Status Bar -->
         <StatusBar Grid.Row="2" Background="{StaticResource BackgroundBrush}">
-            <DockPanel LastChildFill="True">
-                <StatusBarItem DockPanel.Dock="Right" Margin="0,0,10,0">
-                    <TextBlock x:Name="SyncText" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                </StatusBarItem>
-                <StatusBarItem Margin="10,0,0,0">
-                    <TextBlock x:Name="StatusMessageText" FontSize="11" VerticalAlignment="Center"/>
-                </StatusBarItem>
-            </DockPanel>
+            <StatusBar.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                </ItemsPanelTemplate>
+            </StatusBar.ItemsPanel>
+            <StatusBarItem Grid.Column="0" Margin="10,0,0,0">
+                <TextBlock x:Name="ClockText" Text="--:--:--" FontSize="11" FontFamily="Consolas"
+                           Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+            </StatusBarItem>
+            <StatusBarItem Grid.Column="2" Margin="0,0,10,0">
+                <TextBlock x:Name="SyncText" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+            </StatusBarItem>
         </StatusBar>
     </Grid>
 </Window>
