@@ -100,38 +100,14 @@ npm start
 `code` は 10桁(バーコード)でも 5桁(手入力)でもよく、**後方5桁**を学籍番号として採用します。
 `clientScanId` はクライアント発行の UUID で、再送時に二重登録されません（冪等）。
 
-### OCI へのデプロイ
+### サーバのデプロイ（Ubuntu / systemd / Caddy）
 
-Ubuntu の VM に Node.js 22+ を入れ、リバースプロキシに Caddy を使うと HTTPS が簡単です。
-（`better-sqlite3` は v13 で N-API 化され、Node 22 以降の prebuilt バイナリが同梱されます。Node 20 では動きません）
+Linux（OCI の Ubuntu VM 等）で常駐させる手順は [DEPLOY.md](DEPLOY.md) にまとめています。
+systemd ユニットと Caddyfile のひな形は [`deploy/`](deploy/) にあります。
 
-`/etc/caddy/Caddyfile`:
-
-```
-tenko.example.com {
-    reverse_proxy 127.0.0.1:8080
-}
-```
-
-`/etc/systemd/system/barcode-tenko.service`:
-
-```ini
-[Unit]
-Description=Barcode Tenko Server
-After=network.target
-
-[Service]
-WorkingDirectory=/opt/barcode-tenko/server
-ExecStart=/usr/bin/node src/index.js
-Restart=always
-User=tenko
-EnvironmentFile=/opt/barcode-tenko/server/.env
-
-[Install]
-WantedBy=multi-user.target
-```
-
-OCI のセキュリティリストで 80/443 を開放してください（8080 は待ち受けてもCaddy経由のみ公開推奨）。
+- **Node.js 22 以降が必要**です（`better-sqlite3` v13 の要件。Node 20 では動作しません）
+- 外部公開は **Caddy 経由の 80/443 のみ**。アプリの 8080 は開放しないでください
+- 学籍番号は個人情報のため、必ず HTTPS で公開してください
 
 ### Teams Webhook 連携 (無料ワークフロー対応)
 

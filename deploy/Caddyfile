@@ -1,0 +1,12 @@
+# BarcodeTenko サーバ用 Caddy 設定（TLS 終端 + リバースプロキシ）
+# 導入手順は DEPLOY.md を参照。設置先: /etc/caddy/Caddyfile
+#
+# ドメインを実際の FQDN に書き換えてください。A レコードがこのサーバーを
+# 向いていれば、Caddy が Let's Encrypt の証明書を自動取得・更新します。
+
+tenko.example.com {
+	reverse_proxy 127.0.0.1:8080 {
+		# SSE (/api/stream, /admin/api/stream) の反映が遅い場合のみ有効化
+		# flush_interval -1
+	}
+}

@@ -1,0 +1,32 @@
+# BarcodeTenko サーバ用 systemd ユニット
+# 導入手順は DEPLOY.md を参照。設置先: /etc/systemd/system/barcode-tenko.service
+
+[Unit]
+Description=Barcode Tenko Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tenko
+Group=tenko
+WorkingDirectory=/opt/barcode-tenko/server
+EnvironmentFile=/opt/barcode-tenko/server/.env
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+# セキュリティ強化。ProtectSystem=strict で全体を読み取り専用にし、
+# 書き込みが必要な DB ディレクトリだけを ReadWritePaths で許可する。
+# ReadWritePaths のパスは起動前に実在している必要がある（無いと 226/NAMESPACE で失敗）。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/barcode-tenko/server/data
+
+[Install]
+WantedBy=multi-user.target
