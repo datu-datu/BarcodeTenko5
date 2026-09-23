@@ -239,32 +239,83 @@
   });
 
   // --- 受付データ ---
-  async function loadScans() {
+  const SCAN_PAGE_SIZE = 100;
+  let scanOffset = 0;
+  let scanTotal = 0;
+  let scanCurrentCount = 0;
+
+  function appendScanRow(tbody, r) {
+    const tr = document.createElement('tr');
+    if (r.deleted) tr.className = 'muted';
+    tr.innerHTML =
+      `<td>${r.id}</td>` +
+      `<td class="num">${r.student_number}</td>` +
+      `<td>${escapeHtml(r.location_name || '場所未選択')}</td>` +
+      `<td>${escapeHtml(r.session_name || '(未割当)')}</td>` +
+      `<td class="muted">${fmtTime(r.received_at)}</td>` +
+      `<td>${r.deleted ? `<span class="badge deleted">取消 ${fmtTime(r.deleted_at)}</span>` : '<span class="badge open">有効</span>'}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  async function loadScans(append = false) {
+    if (!append) {
+      scanOffset = 0;
+      scanCurrentCount = 0;
+    }
     const sessionId = el('scanSessionFilter').value;
     const includeDeleted = el('scanIncludeDeleted').checked ? '1' : '0';
-    const q = new URLSearchParams({ limit: '200', includeDeleted });
-    if (sessionId !== '') q.set('sessionId', sessionId);
-    const rows = await api('/scans?' + q.toString());
+    const q = el('scanSearchInput').value.trim();
+
+    const params = new URLSearchParams({
+      limit: String(SCAN_PAGE_SIZE),
+      offset: String(scanOffset),
+      includeDeleted
+    });
+    if (sessionId !== '') params.set('sessionId', sessionId);
+    if (q) params.set('q', q);
+
+    const res = await api('/scans?' + params.toString());
+    const rows = Array.isArray(res) ? res : (res.rows || []);
+    scanTotal = res.total !== undefined ? res.total : rows.length;
 
     const tbody = el('scanTable').querySelector('tbody');
-    tbody.innerHTML = '';
+    if (!append) {
+      tbody.innerHTML = '';
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center; padding:16px;">該当するデータはありません</td></tr>';
+      }
+    }
+
     for (const r of rows) {
-      const tr = document.createElement('tr');
-      if (r.deleted) tr.className = 'muted';
-      tr.innerHTML =
-        `<td>${r.id}</td>` +
-        `<td class="num">${r.student_number}</td>` +
-        `<td>${escapeHtml(r.location_name || '場所未選択')}</td>` +
-        `<td>${escapeHtml(r.session_name || '(未割当)')}</td>` +
-        `<td class="muted">${fmtTime(r.received_at)}</td>` +
-        `<td>${r.deleted ? `<span class="badge deleted">取消 ${fmtTime(r.deleted_at)}</span>` : '<span class="badge open">有効</span>'}</td>`;
-      tbody.appendChild(tr);
+      appendScanRow(tbody, r);
+    }
+    scanCurrentCount += rows.length;
+
+    el('scanCountInfo').textContent = `表示中: ${scanCurrentCount} / ${scanTotal} 件`;
+    const loadMoreBtn = el('scanLoadMore');
+    if (scanCurrentCount >= scanTotal) {
+      loadMoreBtn.style.display = 'none';
+    } else {
+      loadMoreBtn.style.display = '';
+      loadMoreBtn.textContent = `さらに読み込む (次の${Math.min(SCAN_PAGE_SIZE, scanTotal - scanCurrentCount)}件)`;
     }
   }
 
   el('scanFilter').addEventListener('submit', async (e) => {
     e.preventDefault();
-    await loadScans();
+    await loadScans(false);
+  });
+
+  el('scanResetBtn').addEventListener('click', async () => {
+    el('scanSearchInput').value = '';
+    el('scanSessionFilter').value = '';
+    el('scanIncludeDeleted').checked = false;
+    await loadScans(false);
+  });
+
+  el('scanLoadMore').addEventListener('click', async () => {
+    scanOffset = scanCurrentCount;
+    await loadScans(true);
   });
 
   // --- Power Automate (Webhook) ---
@@ -351,10 +402,14 @@
       loadSessions().catch(() => {});
     });
     es.addEventListener('scan', () => {
-      loadScans().catch(() => {});
+      if (scanOffset === 0 && !el('scanSearchInput').value.trim()) {
+        loadScans(false).catch(() => {});
+      }
     });
     es.addEventListener('cancel', () => {
-      loadScans().catch(() => {});
+      if (scanOffset === 0 && !el('scanSearchInput').value.trim()) {
+        loadScans(false).catch(() => {});
+      }
     });
     es.onopen = () => {
       el('conn').textContent = '接続中';

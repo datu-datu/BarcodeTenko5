@@ -190,7 +190,9 @@ router.delete('/sessions/:id', (req, res) => {
 router.get('/scans', (req, res) => {
   const includeDeleted = req.query.includeDeleted === '1' || req.query.includeDeleted === 'true';
   const sessionFilter = req.query.sessionId !== undefined && req.query.sessionId !== '' ? Number(req.query.sessionId) : null;
-  const limit = Math.min(Number(req.query.limit) || 200, 1000);
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
 
   const conditions = [];
   const params = [];
@@ -203,7 +205,13 @@ router.get('/scans', (req, res) => {
       params.push(sessionFilter);
     }
   }
+  if (q) {
+    conditions.push('CAST(a.student_number AS TEXT) LIKE ?');
+    params.push(`%${q}%`);
+  }
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM attendance a ${where}`).get(...params).c;
 
   const rows = db
     .prepare(
@@ -215,11 +223,11 @@ router.get('/scans', (req, res) => {
          LEFT JOIN sessions  s ON s.id = a.session_id
          ${where}
          ORDER BY a.id DESC
-         LIMIT ${limit}`
+         LIMIT ? OFFSET ?`
     )
-    .all(...params);
+    .all(...params, limit, offset);
 
-  res.json(rows);
+  res.json({ total, limit, offset, rows });
 });
 
 // --- 管理画面用 SSE ---

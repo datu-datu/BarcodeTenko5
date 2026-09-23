@@ -104,7 +104,9 @@
       <form id="scanFilter" class="inline">
         <select id="scanSessionFilter"><option value="">すべてのセッション</option></select>
         <label class="muted"><input type="checkbox" id="scanIncludeDeleted"> 取消済みを含む</label>
-        <button type="submit">再読込</button>
+        <input id="scanSearchInput" type="search" placeholder="学籍番号で検索 (例: 23456)" style="width: 190px;">
+        <button type="submit">検索</button>
+        <button id="scanResetBtn" type="button" class="small">条件クリア</button>
       </form>
       <table id="scanTable">
         <thead>
@@ -112,6 +114,10 @@
         </thead>
         <tbody></tbody>
       </table>
+      <div id="scanPagination" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 8px;">
+        <span id="scanCountInfo" class="muted">表示中: 0 / 0 件</span>
+        <button id="scanLoadMore" type="button" class="small">さらに読み込む (次の100件)</button>
+      </div>
     </section>
   </main>
 
