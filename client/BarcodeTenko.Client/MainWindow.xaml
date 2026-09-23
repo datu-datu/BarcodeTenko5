@@ -29,13 +29,41 @@
 
         <!-- Main Content -->
         <Grid Grid.Row="1" Margin="12,4,12,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left Panel: Controls -->
-            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+            <!-- Left Guide Text (Row 0, Column 0) -->
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="学籍番号またはバーコードをスキャン" 
+                       FontSize="12" VerticalAlignment="Bottom" Margin="0,0,12,6" 
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+
+            <!-- Right Panel: Search Bar (Row 0, Column 1) -->
+            <DockPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,6" LastChildFill="False">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <TextBlock Text="検索:" VerticalAlignment="Center" FontSize="11" 
+                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                    <Grid Width="160">
+                        <TextBox x:Name="SearchBox" Style="{StaticResource ModernTextBox}"
+                                 FontSize="11" Height="24" VerticalContentAlignment="Center"
+                                 InputMethod.IsInputMethodEnabled="False"
+                                 Padding="4,1,20,1" TextChanged="SearchBox_TextChanged"/>
+                        <Button x:Name="ClearSearchButton" Content="✕" Click="ClearSearch_Click"
+                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="18" Height="18" Margin="0,0,2,0"
+                                BorderThickness="0" Background="Transparent" Foreground="#888888"
+                                FontSize="10" ToolTip="クリア" Visibility="Collapsed"/>
+                    </Grid>
+                </StackPanel>
+            </DockPanel>
+
+            <!-- Left Panel: Controls (Row 1, Column 0) -->
+            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                 <TextBox x:Name="InputBox" Style="{StaticResource ModernTextBox}" 
                         FontSize="16" Height="30" VerticalContentAlignment="Center"
                         InputMethod.IsInputMethodEnabled="False"
@@ -66,69 +94,43 @@
                         Foreground="{StaticResource DangerBrush}"/>
             </StackPanel>
 
-            <!-- Right Panel: Search & DataGrid -->
-            <Grid Grid.Column="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <!-- Search Bar -->
-                <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
-                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                        <TextBlock Text="検索:" VerticalAlignment="Center" FontSize="11" 
-                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
-                        <Grid Width="160">
-                            <TextBox x:Name="SearchBox" Style="{StaticResource ModernTextBox}"
-                                     FontSize="11" Height="24" VerticalContentAlignment="Center"
-                                     InputMethod.IsInputMethodEnabled="False"
-                                     Padding="4,1,20,1" TextChanged="SearchBox_TextChanged"/>
-                            <Button x:Name="ClearSearchButton" Content="✕" Click="ClearSearch_Click"
-                                    HorizontalAlignment="Right" VerticalAlignment="Center"
-                                    Width="18" Height="18" Margin="0,0,2,0"
-                                    BorderThickness="0" Background="Transparent" Foreground="#888888"
-                                    FontSize="10" ToolTip="クリア" Visibility="Collapsed"/>
-                        </Grid>
-                    </StackPanel>
-                </DockPanel>
-
-                <DataGrid x:Name="ScanGrid" Grid.Row="1" AutoGenerateColumns="False" 
-                        IsReadOnly="True" CanUserAddRows="False"
-                        HeadersVisibility="Column" GridLinesVisibility="Horizontal">
-                    <DataGrid.RowStyle>
-                        <Style TargetType="DataGridRow">
-                            <Setter Property="Background" Value="White"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsRecentlyAdded}" Value="True">
-                                    <Setter Property="Background" Value="#E1F5FE"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </DataGrid.RowStyle>
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="時刻" Binding="{Binding TimeText}" Width="100"/>
-                        <DataGridTextColumn Header="点呼場所" Binding="{Binding LocationName}" Width="110"/>
-                        <DataGridTextColumn Header="学籍番号" Binding="{Binding StudentNumberText}" Width="*">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="FontFamily" Value="Consolas"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                    <Setter Property="Padding" Value="5,0"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTemplateColumn Header="操作" Width="70">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Button Content="取り消し" Click="Cancel_Click" Tag="{Binding}"
-                                            Style="{StaticResource ModernButton}"
-                                            Padding="4,0" FontSize="10" MinWidth="40" MinHeight="20"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </Grid>
+            <!-- Right Panel: DataGrid (Row 1, Column 1) -->
+            <DataGrid x:Name="ScanGrid" Grid.Row="1" Grid.Column="1" AutoGenerateColumns="False" 
+                    IsReadOnly="True" CanUserAddRows="False"
+                    HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Setter Property="Background" Value="White"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsRecentlyAdded}" Value="True">
+                                <Setter Property="Background" Value="#E1F5FE"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="時刻" Binding="{Binding TimeText}" Width="100"/>
+                    <DataGridTextColumn Header="点呼場所" Binding="{Binding LocationName}" Width="110"/>
+                    <DataGridTextColumn Header="学籍番号" Binding="{Binding StudentNumberText}" Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                <Setter Property="Padding" Value="5,0"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTemplateColumn Header="操作" Width="70">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="取り消し" Click="Cancel_Click" Tag="{Binding}"
+                                        Style="{StaticResource ModernButton}"
+                                        Padding="4,0" FontSize="10" MinWidth="40" MinHeight="20"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
         </Grid>
 
         <!-- Status Bar -->

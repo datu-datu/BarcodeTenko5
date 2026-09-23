@@ -133,12 +133,40 @@ public partial class MainWindow : Window
 
         StatusMessageText.Foreground = SuccessBrush;
         StatusMessageText.Text = $"受付: {studentNumber.Value:D5}";
-        PlaySound(System.Media.SystemSounds.Asterisk);
+        PlaySuccessSound();
 
         InputBox.Clear();
         InputBox.Focus();
         RefreshRecent(scanId);
         UpdateSyncText();
+    }
+
+    private void PlaySuccessSound()
+    {
+        if (!_config.SoundEnabled)
+        {
+            return;
+        }
+
+        Task.Run(() =>
+        {
+            try
+            {
+                // (ピッ / 1768Hz, 70ms ラの音って落ち着くよねー)
+                Console.Beep(1768, 70);
+            }
+            catch
+            {
+                // ビープ音非対応環境ではフォールバック
+                try
+                {
+                    System.Media.SystemSounds.Asterisk.Play();
+                }
+                catch
+                {
+                }
+            }
+        });
     }
 
     private void PlaySound(System.Media.SystemSound sound)
