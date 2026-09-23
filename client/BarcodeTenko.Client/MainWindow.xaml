@@ -1,0 +1,146 @@
+<Window x:Class="BarcodeTenko.Client.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="学生点呼" Height="580" Width="800"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Yu Gothic UI, Meiryo">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Header -->
+        <DockPanel Grid.Row="0" Margin="12,10,12,6">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                <Button x:Name="SettingsButton" Content="設定" Style="{StaticResource ModernButton}" 
+                        Margin="0,0,6,0" Click="Settings_Click"/>
+                <Button x:Name="OpenBinFolderButton" Content="bin フォルダー" Style="{StaticResource ModernButton}" 
+                        Click="OpenBinFolder_Click"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="場所:" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
+                <TextBlock x:Name="LocationText" VerticalAlignment="Center" FontWeight="Bold" FontSize="14"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1" Margin="12,4,12,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel: Controls -->
+            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                <TextBox x:Name="InputBox" Style="{StaticResource ModernTextBox}" 
+                        FontSize="16" Height="30" VerticalContentAlignment="Center"
+                        InputMethod.IsInputMethodEnabled="False"
+                        KeyDown="InputBox_KeyDown"/>
+                
+                <Button x:Name="SubmitButton" Content="決定" Click="Submit_Click"
+                        Style="{StaticResource ModernButton}" Height="28" Margin="0,6,0,0"/>
+
+                <Separator Margin="0,14"/>
+
+                <TextBlock Text="累計" FontSize="12" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                <Border Background="#F0F0F0" Padding="10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,0,0,14">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock x:Name="TotalCountText" Text="0" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Text=" 件" FontSize="12" VerticalAlignment="Bottom" Margin="4,0,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <Separator Margin="0,14"/>
+
+                <Button x:Name="CompleteButton" Content="点呼完了" Click="Complete_Click"
+                        Style="{StaticResource ModernButton}" Height="30"/>
+
+                <Separator Margin="0,20"/>
+
+                <Button x:Name="DeleteAllButton" Content="全履歴を削除" Click="DeleteAll_Click"
+                        Style="{StaticResource ModernButton}" Height="26" FontSize="11"
+                        Foreground="{StaticResource DangerBrush}"/>
+            </StackPanel>
+
+            <!-- Right Panel: Search & DataGrid -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Search Bar -->
+                <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                        <TextBlock Text="検索:" VerticalAlignment="Center" FontSize="11" 
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                        <Grid Width="160">
+                            <TextBox x:Name="SearchBox" Style="{StaticResource ModernTextBox}"
+                                     FontSize="11" Height="24" VerticalContentAlignment="Center"
+                                     InputMethod.IsInputMethodEnabled="False"
+                                     Padding="4,1,20,1" TextChanged="SearchBox_TextChanged"/>
+                            <Button x:Name="ClearSearchButton" Content="✕" Click="ClearSearch_Click"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    Width="18" Height="18" Margin="0,0,2,0"
+                                    BorderThickness="0" Background="Transparent" Foreground="#888888"
+                                    FontSize="10" ToolTip="クリア" Visibility="Collapsed"/>
+                        </Grid>
+                    </StackPanel>
+                </DockPanel>
+
+                <DataGrid x:Name="ScanGrid" Grid.Row="1" AutoGenerateColumns="False" 
+                        IsReadOnly="True" CanUserAddRows="False"
+                        HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="Background" Value="White"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsRecentlyAdded}" Value="True">
+                                    <Setter Property="Background" Value="#E1F5FE"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="時刻" Binding="{Binding TimeText}" Width="100"/>
+                        <DataGridTextColumn Header="点呼場所" Binding="{Binding LocationName}" Width="110"/>
+                        <DataGridTextColumn Header="学籍番号" Binding="{Binding StudentNumberText}" Width="*">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontFamily" Value="Consolas"/>
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="Padding" Value="5,0"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTemplateColumn Header="操作" Width="70">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="取り消し" Click="Cancel_Click" Tag="{Binding}"
+                                            Style="{StaticResource ModernButton}"
+                                            Padding="4,0" FontSize="10" MinWidth="40" MinHeight="20"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Grid>
+
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="2" Background="{StaticResource BackgroundBrush}">
+            <DockPanel LastChildFill="True">
+                <StatusBarItem DockPanel.Dock="Right" Margin="0,0,10,0">
+                    <TextBlock x:Name="SyncText" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                </StatusBarItem>
+                <StatusBarItem Margin="10,0,0,0">
+                    <TextBlock x:Name="StatusMessageText" FontSize="11" VerticalAlignment="Center"/>
+                </StatusBarItem>
+            </DockPanel>
+        </StatusBar>
+    </Grid>
+</Window>

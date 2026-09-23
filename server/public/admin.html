@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>点呼 管理画面</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="box">
+      <h2>管理者ログイン</h2>
+      <input id="password" type="password" placeholder="パスワード" autocomplete="current-password">
+      <button id="loginBtn" class="primary" style="width:100%">ログイン</button>
+      <div id="loginError" class="error"></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <h1>点呼 管理画面</h1>
+    <div class="nav">
+      <span id="conn" class="conn">接続中...</span>
+      <a href="/">ダッシュボード</a>
+      <a href="#" id="logout">ログアウト</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="cards">
+      <div class="card big">
+        <div class="label">点呼完了率</div>
+        <div id="rate" class="value">—</div>
+        <div id="sessionName" class="sub">セッション: -</div>
+      </div>
+      <div class="card">
+        <div class="label">点呼済み / 対象者数</div>
+        <div id="total" class="value">0 / 0</div>
+      </div>
+      <div class="card">
+        <div class="label">セッション外スキャン</div>
+        <div id="preSession" class="value">0</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>セッション</h2>
+      <form id="sessionForm" class="inline">
+        <input id="sessionNameInput" placeholder="セッション名 (例: 1日目 午前)" style="min-width:220px">
+        <input id="sessionTargetInput" type="number" min="0" placeholder="点呼対象者数" style="width:150px">
+        <button class="primary" type="submit">追加</button>
+      </form>
+      <table id="sessionTable">
+        <thead>
+          <tr><th>ID</th><th>名前</th><th>状態</th><th class="num">対象者数</th><th class="num">点呼済み</th><th>開始</th><th>終了</th><th>操作</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>点呼場所</h2>
+      <form id="locationForm" class="inline">
+        <input id="locationNameInput" placeholder="点呼場所名 (例: 体育館)" style="min-width:220px">
+        <input id="locationSortInput" type="number" placeholder="並び順" style="width:110px">
+        <button class="primary" type="submit">追加</button>
+      </form>
+      <table id="locationTable">
+        <thead><tr><th>ID</th><th>名前</th><th class="num">並び順</th><th>状態</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Power Automate 連携 (Teams Webhook)</h2>
+      <div class="inline">
+        <label class="muted"><input type="checkbox" id="webhookEnabled"> 自動送信を有効にする</label>
+        <button id="webhookFlush" class="primary" type="button">今すぐ送信</button>
+        <span id="webhookPending" class="muted"></span>
+        <span id="webhookUrlState" class="muted"></span>
+      </div>
+      <div id="webhookInfo" class="muted"></div>
+    </section>
+
+    <section class="panel">
+      <h2>受付データ</h2>
+      <form id="scanFilter" class="inline">
+        <select id="scanSessionFilter"><option value="">すべてのセッション</option></select>
+        <label class="muted"><input type="checkbox" id="scanIncludeDeleted"> 取消済みを含む</label>
+        <button type="submit">再読込</button>
+      </form>
+      <table id="scanTable">
+        <thead>
+          <tr><th>ID</th><th>学籍番号</th><th>場所</th><th>セッション</th><th>受付時刻</th><th>状態</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="admin.js"></script>
+</body>
+</html>

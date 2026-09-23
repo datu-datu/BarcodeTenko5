@@ -1,0 +1,19 @@
+<Window x:Class="BarcodeTenko.Client.LocationSelectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="点呼場所の選択" Width="320" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Background="{StaticResource BackgroundBrush}"
+        FontFamily="Yu Gothic UI, Meiryo">
+    <StackPanel Margin="16">
+        <TextBlock Text="場所を選択" FontSize="12" Margin="0,0,0,6" Foreground="{StaticResource TextPrimaryBrush}"/>
+        <ComboBox x:Name="LocationCombo" Height="28" DisplayMemberPath="Name" Margin="0,0,0,16"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="キャンセル" Style="{StaticResource ModernButton}" Width="75" Height="26" 
+                    Margin="0,0,8,0" Click="Cancel_Click"/>
+            <Button Content="決定" Style="{StaticResource ModernButton}" Width="75" Height="26" 
+                    IsDefault="True" Click="Ok_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

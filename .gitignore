@@ -1,0 +1,18 @@
+# build artifacts
+[Bb]in/
+[Oo]bj/
+.vs/
+
+# runtime data
+data/
+
+# node
+node_modules/
+
+# env / logs
+.env
+*.log
+
+# other
+.commandcode
+TEAMS_WEBHOOK_GUIDE.md
