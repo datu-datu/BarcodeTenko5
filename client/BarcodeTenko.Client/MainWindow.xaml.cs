@@ -152,7 +152,7 @@ public partial class MainWindow : Window
 
         _store.AddScan(record);
         _sync.RequestSync();
-        RewriteLiveBin();
+        AppendLiveBin(studentNumber.Value);
 
         RefreshRecent(scanId);
         UpdateSyncText();
@@ -234,15 +234,30 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 未完了の点呼データを作業中 bin (tenko_live.bin) に全件書き直す。
-    /// 追加・取り消しのたびに呼び、点呼完了を押さなくても常に最新の内容を出力しておく。
+    /// 未確定の点呼データを作業中 bin (bin/tenko_live.bin) に全件書き直す。
+    /// 取消・全削除・起動時・点呼完了の直前に呼ぶ。
     /// </summary>
     private void RewriteLiveBin()
     {
         try
         {
-            var numbers = _store.GetPendingExport().Select(r => r.StudentNumber).ToList();
-            BinWriter.WriteLive(numbers, _config.DataDirectory);
+            var numbers = _store.GetPendingStudentNumbers();
+            BinWriter.WriteLive(numbers, _config.OutputDirectory);
+        }
+        catch (Exception ex)
+        {
+            SyncText.Text = "bin 書き出し失敗: " + ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// スキャン1件を作業中 bin の末尾に追記する (全件書き直しを避ける高速パス)。
+    /// </summary>
+    private void AppendLiveBin(int studentNumber)
+    {
+        try
+        {
+            BinWriter.AppendLive(studentNumber, _config.OutputDirectory);
         }
         catch (Exception ex)
         {
@@ -301,10 +316,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (record.Sent)
-        {
-            _store.EnqueueCancel(record.ClientScanId);
-        }
+        _store.EnqueueCancel(record.ClientScanId);
         _store.DeleteScan(record.ClientScanId);
         _sync.RequestSync();
         RewriteLiveBin();
@@ -384,7 +396,7 @@ public partial class MainWindow : Window
         {
             // 念のため作業中 bin を最新化してからリネームする
             RewriteLiveBin();
-            var path = BinWriter.FinalizeLive(_config.DataDirectory, _config.OutputDirectory, _location.Name);
+            var path = BinWriter.FinalizeLive(_config.OutputDirectory, _location.Name);
             _store.MarkCompleted(pending.Select(r => r.Id), path);
             SetLastScan("受付中", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();

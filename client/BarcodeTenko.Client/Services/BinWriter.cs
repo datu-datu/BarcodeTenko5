@@ -6,17 +6,19 @@ namespace BarcodeTenko.Client.Services;
 
 public static class BinWriter
 {
-    /// <summary>常時出力される作業中 bin ファイルのパス（data/ ディレクトリ内）</summary>
-    public static string LiveFilePath(string dataDirectory)
-        => Path.Combine(dataDirectory, "tenko_live.bin");
+    private const string LiveFileName = "tenko_live.bin";
+
+    /// <summary>作業中 bin ファイルのパス (bin/ ディレクトリ内)</summary>
+    public static string LiveFilePath(string outputDirectory)
+        => Path.Combine(outputDirectory, LiveFileName);
 
     /// <summary>
-    /// 未完了の点呼データを作業中 bin (data/tenko_live.bin) に全件書き直す。
-    /// スキャン追加・取り消しのたびに呼び、常に最新状態を出力しておく。
+    /// 未確定の点呼データを作業中 bin (bin/tenko_live.bin) に全件書き直す。
+    /// 取消・全削除・起動時・点呼完了の直前に使う。
     /// </summary>
-    public static void WriteLive(IReadOnlyList<int> studentNumbers, string dataDirectory)
+    public static void WriteLive(IReadOnlyList<int> studentNumbers, string outputDirectory)
     {
-        var path = LiveFilePath(dataDirectory);
+        var path = LiveFilePath(outputDirectory);
         if (studentNumbers.Count == 0)
         {
             if (File.Exists(path))
@@ -26,22 +28,34 @@ public static class BinWriter
             return;
         }
 
-        Directory.CreateDirectory(dataDirectory);
+        Directory.CreateDirectory(outputDirectory);
         WriteNumbers(studentNumbers, path);
     }
 
     /// <summary>
-    /// 点呼完了: 作業中 bin (data/) をタイムスタンプ付きの最終ファイル名にして出力ディレクトリ (bin/) に移動する。
+    /// スキャン1件を作業中 bin の末尾に追記する (全件書き直しを避ける高速パス)。
+    /// 新規スキャンは未確定(completed = 0)の中で常に最大 id のため、末尾追記で id 順が保たれる。
     /// </summary>
-    public static string FinalizeLive(string dataDirectory, string outputDirectory, string locationName)
+    public static void AppendLive(int studentNumber, string outputDirectory)
     {
-        var livePath = LiveFilePath(dataDirectory);
+        Directory.CreateDirectory(outputDirectory);
+        var path = LiveFilePath(outputDirectory);
+        using var stream = new FileStream(path, FileMode.Append, FileAccess.Write);
+        using var writer = new BinaryWriter(stream);
+        writer.Write((ushort)studentNumber);
+    }
+
+    /// <summary>
+    /// 点呼完了: 作業中 bin (bin/tenko_live.bin) をタイムスタンプ付きの最終ファイル名にリネームする。
+    /// </summary>
+    public static string FinalizeLive(string outputDirectory, string locationName)
+    {
+        var livePath = LiveFilePath(outputDirectory);
         if (!File.Exists(livePath))
         {
             throw new FileNotFoundException("出力対象の bin ファイルがありません。");
         }
 
-        Directory.CreateDirectory(outputDirectory);
         var fileName = $"tenko_{Sanitize(locationName)}_{DateTime.Now:yyyyMMdd_HHmmss}.bin";
         var finalPath = Path.Combine(outputDirectory, fileName);
         File.Move(livePath, finalPath);

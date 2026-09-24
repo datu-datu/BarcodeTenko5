@@ -168,6 +168,7 @@ dotnet publish client/BarcodeTenko.Client/BarcodeTenko.Client.csproj \
 - ファイル名: `tenko_<点呼場所>_<yyyyMMdd_HHmmss>.bin`
 - 中身: 学籍番号(5桁)を **UInt16・リトルエンディアン**で並べただけ。ヘッダや件数はなし
 - 出力対象はそのセッション中に受付した（取消していない）学籍番号
+- 受付中は作業中ファイル `tenko_live.bin` が同じ `bin/` に生成・更新され、「点呼完了」で上記ファイル名にリネームされます（未確定が 0 件になると削除されます）
 
 ---
 

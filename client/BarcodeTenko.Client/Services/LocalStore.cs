@@ -159,6 +159,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
         return ReadScans(cmd);
     }
 
+    /// <summary>作業中 bin 書き出し用。未確定の学籍番号のみを id 順で返す。</summary>
+    public List<int> GetPendingStudentNumbers()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT student_number FROM scans WHERE completed = 0 ORDER BY id";
+        var list = new List<int>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            list.Add(reader.GetInt32(0));
+        }
+        return list;
+    }
+
     public void MarkCompleted(IEnumerable<long> ids, string binFile)
     {
         using var conn = Open();
@@ -223,21 +238,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
     /// <summary>
     /// 全履歴を物理削除する。
-    /// 送信済み(sent = 1)のレコードは pending_cancels にキューイングしてサーバ側にも取消を伝播する。
-    /// 未送信のレコードは破棄される。
+    /// 送信の有無に関わらず全ての client_scan_id を pending_cancels にキューイングして
+    /// サーバ側にも取消を伝播する（サーバに無い場合は not_found となるだけで無害）。
     /// </summary>
     public void DeleteAll()
     {
         using var conn = Open();
         using var tx = conn.BeginTransaction();
 
-        // 1. 送信済み(sent = 1)の client_scan_id を pending_cancels に追加
+        // 1. 全 client_scan_id を pending_cancels に追加
         using (var cmd = conn.CreateCommand())
         {
             cmd.Transaction = tx;
             cmd.CommandText = @"
                 INSERT OR IGNORE INTO pending_cancels (client_scan_id, created_at)
-                SELECT client_scan_id, $now FROM scans WHERE sent = 1";
+                SELECT client_scan_id, $now FROM scans";
             cmd.Parameters.AddWithValue("$now", DateTimeOffset.Now.ToString("o"));
             cmd.ExecuteNonQuery();
         }
