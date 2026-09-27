@@ -78,6 +78,13 @@ router.post('/webhook/flush', async (req, res) => {
   res.json({ ...result, ...webhook.status() });
 });
 
+router.post('/webhook/send', async (req, res) => {
+  const ids = (req.body || {}).ids;
+  const result = await webhook.sendSelected(ids);
+  broadcastStats();
+  res.json({ ...result, ...webhook.status() });
+});
+
 router.get('/webhook/logs', (req, res) => {
   const limit = req.query.limit ? Number(req.query.limit) : 50;
   res.json(webhook.getLogs(limit));
@@ -336,7 +343,7 @@ router.get('/scans', (req, res) => {
   const rows = db
     .prepare(
       `SELECT a.id, a.client_scan_id, a.session_id, a.location_id, a.student_number, a.received_at,
-              a.client_time, a.deleted, a.deleted_at,
+              a.client_time, a.deleted, a.deleted_at, a.webhook_sent,
               l.name AS location_name, s.name AS session_name
          FROM attendance a
          LEFT JOIN locations l ON l.id = a.location_id

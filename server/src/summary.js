@@ -38,7 +38,10 @@ function computeSummary() {
   }
 
   const preSessionTotal = db.prepare('SELECT COUNT(*) AS c FROM attendance WHERE deleted = 0 AND session_id IS NULL').get().c;
-  const webhookPending = db.prepare('SELECT COUNT(*) AS c FROM attendance WHERE webhook_sent = 0 AND deleted = 0').get().c;
+  // 自動送信の対象はセッション内のみ (セッション外は選択手動送信でのみ送る)
+  const webhookPending = db
+    .prepare('SELECT COUNT(*) AS c FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id IS NOT NULL')
+    .get().c;
   const webhookEnabled = (db.prepare("SELECT value FROM settings WHERE key = 'webhook_enabled'").get() || { value: '1' }).value === '1';
 
   return {

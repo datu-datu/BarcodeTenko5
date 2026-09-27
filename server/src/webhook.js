@@ -26,12 +26,19 @@ function setEnabled(enabled) {
   ).run(enabled ? '1' : '0');
 }
 
+// 自動送信の対象はセッション内の受付のみ (セッション外は session_id が NULL のため除外)
 function pendingCount() {
-  return db.prepare('SELECT COUNT(*) AS c FROM attendance WHERE webhook_sent = 0 AND deleted = 0').get().c;
+  return db
+    .prepare('SELECT COUNT(*) AS c FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id IS NOT NULL')
+    .get().c;
 }
 
 function getUnsent(limit) {
-  return db.prepare('SELECT * FROM attendance WHERE webhook_sent = 0 AND deleted = 0 ORDER BY id LIMIT ?').all(limit);
+  return db
+    .prepare(
+      'SELECT * FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id IS NOT NULL ORDER BY id LIMIT ?'
+    )
+    .all(limit);
 }
 
 function markSent(ids) {
@@ -147,9 +154,10 @@ function getLogs(limit = 50) {
 }
 
 // 1 バッチ(最大 BATCH_SIZE 件)を 1 Webhook として送る
-async function sendOneBatch(triggerType = 'auto') {
+// records を渡すとそのレコードを送信対象にする (手動の選択送信用)。未指定なら未送信を取得する。
+async function sendOneBatch(triggerType = 'auto', records = null) {
   if (!config.webhookUrl) return 0;
-  const records = getUnsent(config.webhookBatchSize);
+  if (!records) records = getUnsent(config.webhookBatchSize);
   if (records.length === 0) return 0;
 
   const studentNumbers = records.map((r) => r.student_number).join(', ');
@@ -209,6 +217,35 @@ async function flushAll(maxBatches = 200) {
   return { sent };
 }
 
+// 選択した受付データを送信する (手動送信用)。取消済みは対象外。送信済みも再送できる。
+async function sendSelected(ids) {
+  if (!config.webhookUrl) return { sent: 0, reason: 'no_url' };
+  if (sending) return { sent: 0, reason: 'busy' };
+
+  const list = (Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isInteger(n));
+  if (list.length === 0) return { sent: 0, reason: 'no_records' };
+
+  const placeholders = list.map(() => '?').join(',');
+  const records = db
+    .prepare(`SELECT * FROM attendance WHERE deleted = 0 AND id IN (${placeholders}) ORDER BY id`)
+    .all(...list);
+  if (records.length === 0) return { sent: 0, reason: 'no_records' };
+
+  sending = true;
+  let sent = 0;
+  try {
+    for (let i = 0; i < records.length; i += config.webhookBatchSize) {
+      const chunk = records.slice(i, i + config.webhookBatchSize);
+      const count = await sendOneBatch('manual', chunk);
+      sent += count;
+      if (count === 0) break;
+    }
+  } finally {
+    sending = false;
+  }
+  return { sent, requested: records.length };
+}
+
 // 自動送信の判定
 async function tick() {
   if (!config.webhookUrl) return;
@@ -228,7 +265,11 @@ async function tick() {
     return;
   }
 
-  const last = db.prepare('SELECT MAX(received_at) AS m FROM attendance WHERE webhook_sent = 0 AND deleted = 0').get().m;
+  const last = db
+    .prepare(
+      'SELECT MAX(received_at) AS m FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id IS NOT NULL'
+    )
+    .get().m;
   if (last && Date.now() - Date.parse(last) >= config.webhookIdleMs) {
     sending = true;
     try {
@@ -255,4 +296,4 @@ function start() {
   setInterval(() => tick().catch(() => {}), 1000).unref();
 }
 
-module.exports = { start, isEnabled, setEnabled, pendingCount, flushAll, status, tick, getLogs, recordLog };
+module.exports = { start, isEnabled, setEnabled, pendingCount, flushAll, status, tick, getLogs, recordLog, sendSelected };

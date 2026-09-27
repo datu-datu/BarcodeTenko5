@@ -275,16 +275,30 @@
   let scanOffset = 0;
   let scanTotal = 0;
   let scanCurrentCount = 0;
+  const selectedScanIds = new Set();
+
+  function updateScanSelection() {
+    const checked = el('scanTable').querySelectorAll('.scan-row-check:checked').length;
+    el('scanSelectedInfo').textContent = `選択: ${checked} 件`;
+    el('scanSendBtn').disabled = checked === 0;
+  }
 
   function appendScanRow(tbody, r) {
     const tr = document.createElement('tr');
     if (r.deleted) tr.className = 'muted';
+    const sentBadge = r.webhook_sent
+      ? '<span class="badge open">送信済</span>'
+      : '<span class="badge idle">未送信</span>';
+    const checked = selectedScanIds.has(r.id) ? ' checked' : '';
+    const disabled = r.deleted ? ' disabled' : '';
     tr.innerHTML =
+      `<td><input type="checkbox" class="scan-row-check" data-id="${r.id}"${checked}${disabled}></td>` +
       `<td>${r.id}</td>` +
       `<td class="num">${r.student_number}</td>` +
       `<td>${escapeHtml(r.location_name || '場所未選択')}</td>` +
       `<td>${escapeHtml(r.session_name || '(未割当)')}</td>` +
       `<td class="muted">${fmtTime(r.received_at)}</td>` +
+      `<td>${sentBadge}</td>` +
       `<td>${r.deleted ? `<span class="badge deleted">取消 ${fmtTime(r.deleted_at)}</span>` : '<span class="badge open">有効</span>'}</td>`;
     tbody.appendChild(tr);
   }
@@ -313,8 +327,9 @@
     const tbody = el('scanTable').querySelector('tbody');
     if (!append) {
       tbody.innerHTML = '';
+      el('scanSelectAll').checked = false;
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center; padding:16px;">該当するデータはありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center; padding:16px;">該当するデータはありません</td></tr>';
       }
     }
 
@@ -331,10 +346,53 @@
       loadMoreBtn.style.display = '';
       loadMoreBtn.textContent = `さらに読み込む (次の${Math.min(SCAN_PAGE_SIZE, scanTotal - scanCurrentCount)}件)`;
     }
+    updateScanSelection();
   }
+
+  el('scanTable').addEventListener('change', (e) => {
+    const check = e.target.closest('.scan-row-check');
+    if (!check) return;
+    const id = Number(check.dataset.id);
+    if (check.checked) selectedScanIds.add(id);
+    else selectedScanIds.delete(id);
+    updateScanSelection();
+  });
+
+  el('scanSelectAll').addEventListener('change', () => {
+    const on = el('scanSelectAll').checked;
+    el('scanTable')
+      .querySelectorAll('.scan-row-check:not(:disabled)')
+      .forEach((check) => {
+        check.checked = on;
+        const id = Number(check.dataset.id);
+        if (on) selectedScanIds.add(id);
+        else selectedScanIds.delete(id);
+      });
+    updateScanSelection();
+  });
+
+  el('scanSendBtn').addEventListener('click', async () => {
+    const ids = Array.from(selectedScanIds);
+    if (ids.length === 0) return;
+    if (!confirm(`選択した ${ids.length} 件を Webhook へ送信しますか？`)) return;
+    el('scanSendBtn').disabled = true;
+    try {
+      const result = await api('/webhook/send', { method: 'POST', body: JSON.stringify({ ids }) });
+      alert(result.sent > 0 ? `送信しました: ${result.sent} 件` : `送信できませんでした (${result.reason || '不明'})`);
+      selectedScanIds.clear();
+      await loadScans(false);
+      await loadWebhook();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      updateScanSelection();
+    }
+  });
 
   el('scanFilter').addEventListener('submit', async (e) => {
     e.preventDefault();
+    selectedScanIds.clear();
+    el('scanSelectAll').checked = false;
     await loadScans(false);
   });
 
@@ -342,6 +400,8 @@
     el('scanSearchInput').value = '';
     el('scanSessionFilter').value = '';
     el('scanIncludeDeleted').checked = false;
+    selectedScanIds.clear();
+    el('scanSelectAll').checked = false;
     await loadScans(false);
   });
 

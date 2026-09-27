@@ -74,7 +74,7 @@
       <h2>Power Automate 連携 (Teams Webhook)</h2>
       <div class="inline">
         <label class="muted"><input type="checkbox" id="webhookEnabled"> 自動送信を有効にする</label>
-        <button id="webhookFlush" class="primary" type="button">今すぐ送信</button>
+        <button id="webhookFlush" class="primary" type="button" title="セッション内の未送信データをまとめて送信します">今すぐ送信</button>
         <span id="webhookPending" class="muted"></span>
         <span id="webhookUrlState" class="muted"></span>
       </div>
@@ -108,9 +108,16 @@
         <button type="submit">検索</button>
         <button id="scanResetBtn" type="button" class="small">条件クリア</button>
       </form>
+      <div class="inline" style="margin: 8px 0; align-items: center;">
+        <button id="scanSendBtn" class="primary" type="button" disabled>選択したデータを送信</button>
+        <span id="scanSelectedInfo" class="muted">選択: 0 件</span>
+      </div>
       <table id="scanTable">
         <thead>
-          <tr><th>ID</th><th>学籍番号</th><th>場所</th><th>セッション</th><th>受付時刻</th><th>状態</th></tr>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" id="scanSelectAll" title="表示中を全選択"></th>
+            <th>ID</th><th>学籍番号</th><th>場所</th><th>セッション</th><th>受付時刻</th><th>送信</th><th>状態</th>
+          </tr>
         </thead>
         <tbody></tbody>
       </table>
