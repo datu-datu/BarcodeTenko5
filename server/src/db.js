@@ -46,6 +46,15 @@ CREATE INDEX IF NOT EXISTS idx_attendance_session  ON attendance(session_id, del
 CREATE INDEX IF NOT EXISTS idx_attendance_location ON attendance(location_id, deleted);
 CREATE INDEX IF NOT EXISTS idx_attendance_webhook  ON attendance(webhook_sent, deleted);
 
+CREATE TABLE IF NOT EXISTS session_completions (
+  session_id   INTEGER NOT NULL,
+  client_id    TEXT    NOT NULL,
+  scan_count   INTEGER NOT NULL DEFAULT 0,   -- クライアントが確定した件数 (参考表示用)
+  bin_name     TEXT,                          -- 確定 bin ファイル名 (参考表示用)
+  completed_at TEXT    NOT NULL,
+  PRIMARY KEY (session_id, client_id)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT

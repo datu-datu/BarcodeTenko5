@@ -124,12 +124,61 @@ router.delete('/locations/:id', (req, res) => {
 // --- セッション ---
 router.get('/sessions', (req, res) => {
   const rows = db.prepare('SELECT * FROM sessions ORDER BY id DESC').all();
+  const countScan = db.prepare('SELECT COUNT(*) AS c FROM attendance WHERE session_id = ? AND deleted = 0');
+  const countClients = db.prepare(
+    'SELECT COUNT(DISTINCT client_id) AS c FROM attendance WHERE session_id = ? AND client_id IS NOT NULL'
+  );
+  const countCompleted = db.prepare('SELECT COUNT(*) AS c FROM session_completions WHERE session_id = ?');
   res.json(
     rows.map((s) => ({
       ...s,
-      count: db.prepare('SELECT COUNT(*) AS c FROM attendance WHERE session_id = ? AND deleted = 0').get(s.id).c
+      count: countScan.get(s.id).c,
+      clientTotal: countClients.get(s.id).c,
+      clientCompleted: countCompleted.get(s.id).c
     }))
   );
+});
+
+// セッションごとの参加クライアントと完了状況 (終了時の警告ダイアログ用)
+router.get('/sessions/:id/completions', (req, res) => {
+  const id = Number(req.params.id);
+  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
+  if (!session) return res.status(404).json({ error: 'not found' });
+
+  // 参加クライアント = このセッションでスキャンが1件でも届いた client_id (取消済みも含む)
+  const participants = db
+    .prepare(
+      `SELECT a.client_id AS clientId,
+              GROUP_CONCAT(DISTINCT COALESCE(l.name, '場所未選択')) AS locationNames
+         FROM attendance a
+         LEFT JOIN locations l ON l.id = a.location_id
+        WHERE a.session_id = ? AND a.client_id IS NOT NULL
+        GROUP BY a.client_id`
+    )
+    .all(id);
+  const completions = db
+    .prepare('SELECT client_id, scan_count, bin_name, completed_at FROM session_completions WHERE session_id = ?')
+    .all(id);
+  const byClient = new Map(completions.map((c) => [c.client_id, c]));
+
+  const clients = participants.map((p) => {
+    const done = byClient.get(p.clientId);
+    return {
+      clientId: p.clientId,
+      locations: p.locationNames ? p.locationNames.split(',') : [],
+      completed: Boolean(done),
+      completedAt: done ? done.completed_at : null,
+      scanCount: done ? done.scan_count : null,
+      binName: done ? done.bin_name : null
+    };
+  });
+
+  res.json({
+    sessionId: id,
+    clientTotal: clients.length,
+    clientCompleted: clients.filter((c) => c.completed).length,
+    clients
+  });
 });
 
 router.post('/sessions', (req, res) => {

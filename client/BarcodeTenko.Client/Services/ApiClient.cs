@@ -34,7 +34,7 @@ public sealed class ApiClient
         return result ?? new List<Location>();
     }
 
-    public async Task SendScanAsync(ScanRecord record, CancellationToken ct = default)
+    public async Task<ScanResponse?> SendScanAsync(ScanRecord record, CancellationToken ct = default)
     {
         var payload = new
         {
@@ -45,6 +45,17 @@ public sealed class ApiClient
         };
 
         using var response = await _http.PostAsJsonAsync("api/scan", payload, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ScanResponse>(JsonOptions, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 点呼完了の報告。最善努力で1回だけ送り、失敗しても再送しない (呼び出し側で握りつぶす)。
+    /// </summary>
+    public async Task CompleteSessionAsync(int? sessionId, int scanCount, string binName, CancellationToken ct = default)
+    {
+        using var response = await _http.PostAsJsonAsync("api/session/complete",
+            new { sessionId, scanCount, binName }, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
 

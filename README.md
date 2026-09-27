@@ -87,12 +87,14 @@ npm start
 | --- | --- | --- | --- |
 | POST | `/api/scan` | Client token | スキャン受付 `{clientScanId, locationId, code, clientTime}` |
 | POST | `/api/cancel` | Client token | 取消(論理削除) `{clientScanId}` |
+| POST | `/api/session/complete` | Client token | 点呼完了報告 `{sessionId?, scanCount?, binName?}` (clientID は `X-Client-Id` ヘッダ) |
 | GET | `/api/status` | Client token | 現在のセッション・集計 |
 | GET | `/api/locations` | Client token | 有効な点呼場所一覧 |
 | GET | `/api/summary` | Dashboard | 集計 |
-| GET | `/api/stream` | Dashboard | SSE (stats / scan / cancel / session) |
+| GET | `/api/stream` | Dashboard | SSE (stats / scan / cancel / session / completions) |
 | POST | `/admin/api/login` | - | 管理者ログイン |
-| GET/POST/PATCH/DELETE | `/admin/api/sessions` | Admin | セッション管理 |
+| GET/POST/PATCH/DELETE | `/admin/api/sessions` | Admin | セッション管理（一覧各行に `clientTotal`/`clientCompleted`） |
+| GET | `/admin/api/sessions/:id/completions` | Admin | 参加clientIDと完了状況（点呼場所名付き） |
 | GET/POST/PATCH/DELETE | `/admin/api/locations` | Admin | 点呼場所管理 |
 | GET | `/admin/api/scans` | Admin | 受付データ一覧 |
 | GET | `/admin/api/stream` | Admin | 管理画面用 SSE |
@@ -161,7 +163,7 @@ dotnet publish client/BarcodeTenko.Client/BarcodeTenko.Client.csproj \
 2. バーコードをかざす or 学籍番号(下5桁)を入力して Enter
 3. 画面下に「点呼済み / 対象者数」と完了率が表示されます
 4. 誤入力は一覧の「取り消し」ボタンで取消（サーバ側は取消フラグで記録が残ります）
-5. セッション終了時に「点呼完了」を押すと bin ファイルを出力し、エクスプローラーで表示
+5. セッション終了時に「点呼完了」を押すと bin ファイルを出力し、エクスプローラーで表示（同時にサーバへ完了を報告。オフライン時は報告をあきらめ、bin 出力はそのまま完了します）
 
 ### bin ファイル形式
 
@@ -177,6 +179,7 @@ dotnet publish client/BarcodeTenko.Client/BarcodeTenko.Client.csproj \
 - 学籍番号は最大 26300 のため UInt16 で表現可能（上限 65535 を超える入力は拒否）
 - セッション開始前・終了後のスキャンも **サーバには常に記録**（`session_id = NULL`、集計対象外）。クライアントは警告しません
 - 取消はサーバ側で `deleted = 1` の論理削除。クライアント側は物理削除
+- 点呼完了報告: 「点呼完了」確定時に `X-Client-Id` で識別される端末単位の報告をサーバが `session_completions` に記録（`(session_id, client_id)` の upsert、再送なし）。管理画面のセッション表に「端末完了 n / 参加端末数」を表示し、参加端末 = そのセッションでスキャンが1件でも届いた clientID（点呼場所名を併記）。未完了の端末があっても終了/切替はできる（警告のみ）
 - 同一学籍番号の重複チェックは行いません（受付件数をそのまま加算）
 - 対象者数はセッション単位で設定し、完了率 = 点呼済み / 対象者数
 - 時刻はサーバ受信時刻を正とします

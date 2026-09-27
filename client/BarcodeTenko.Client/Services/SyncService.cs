@@ -6,6 +6,8 @@ namespace BarcodeTenko.Client.Services;
 /// </summary>
 public sealed class SyncService
 {
+    private const string LastSessionIdKey = "last_session_id";
+
     private readonly LocalStore _store;
     private readonly ApiClient _api;
     private readonly SemaphoreSlim _signal = new(0, 1);
@@ -16,12 +18,19 @@ public sealed class SyncService
     {
         _store = store;
         _api = api;
+        if (int.TryParse(_store.GetValue(LastSessionIdKey), out var sessionId))
+        {
+            LastSessionId = sessionId;
+        }
     }
 
     public event Action? StateChanged;
 
     public bool LastSyncFailed { get; private set; }
     public DateTimeOffset? LastSyncAt { get; private set; }
+
+    /// <summary>スキャン受付レスポンスから得た、直近のサーバセッションID (点呼完了報告用)</summary>
+    public int? LastSessionId { get; private set; }
 
     public void Start()
     {
@@ -79,11 +88,23 @@ public sealed class SyncService
         }
     }
 
+    private void RecordSession(Models.ScanResponse? response)
+    {
+        if (response?.SessionId is not int sessionId || LastSessionId == sessionId)
+        {
+            return;
+        }
+
+        LastSessionId = sessionId;
+        _store.SetValue(LastSessionIdKey, sessionId.ToString());
+    }
+
     public async Task SyncOnceAsync(CancellationToken ct = default)
     {
         foreach (var record in _store.GetUnsent(100))
         {
-            await _api.SendScanAsync(record, ct).ConfigureAwait(false);
+            var response = await _api.SendScanAsync(record, ct).ConfigureAwait(false);
+            RecordSession(response);
             _store.MarkSent(record.Id);
         }
 
@@ -110,7 +131,8 @@ public sealed class SyncService
 
             foreach (var record in unsent)
             {
-                await _api.SendScanAsync(record, ct).ConfigureAwait(false);
+                var response = await _api.SendScanAsync(record, ct).ConfigureAwait(false);
+                RecordSession(response);
                 _store.MarkSent(record.Id);
             }
         }

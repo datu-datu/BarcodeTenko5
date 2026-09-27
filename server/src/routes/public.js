@@ -116,6 +116,38 @@ router.post('/cancel', auth.clientAuth, (req, res) => {
   res.json({ ok: true, cancelled: true });
 });
 
+// 点呼完了報告。クライアントが「点呼完了」確定後に最善努力で1回だけ送る (再送なし)。
+router.post('/session/complete', auth.clientAuth, (req, res) => {
+  const clientId = req.get('X-Client-Id');
+  if (typeof clientId !== 'string' || clientId.length === 0) {
+    return res.status(400).json({ error: 'X-Client-Id header is required' });
+  }
+
+  const body = req.body || {};
+  let sessionId = Number.isInteger(body.sessionId) ? body.sessionId : null;
+  if (sessionId !== null && !db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId)) {
+    sessionId = null;
+  }
+  if (sessionId === null) {
+    const open = db.prepare("SELECT id FROM sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
+    if (!open) return res.status(400).json({ error: 'no session' });
+    sessionId = open.id;
+  }
+
+  const scanCount = Number.isInteger(body.scanCount) && body.scanCount >= 0 ? body.scanCount : 0;
+  const binName = typeof body.binName === 'string' ? body.binName : null;
+
+  db.prepare(
+    `INSERT INTO session_completions (session_id, client_id, scan_count, bin_name, completed_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(session_id, client_id)
+     DO UPDATE SET scan_count = excluded.scan_count, bin_name = excluded.bin_name, completed_at = excluded.completed_at`
+  ).run(sessionId, clientId, scanCount, binName, nowIso());
+
+  events.broadcast('completions', { sessionId, clientId });
+  res.json({ ok: true, sessionId });
+});
+
 router.get('/status', auth.clientAuth, (req, res) => {
   res.json(computeSummary());
 });

@@ -55,6 +55,25 @@ CREATE TABLE IF NOT EXISTS app_settings (
         cmd.ExecuteNonQuery();
     }
 
+    public string? GetValue(string key)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT value FROM app_settings WHERE key = $key";
+        cmd.Parameters.AddWithValue("$key", key);
+        return cmd.ExecuteScalar() as string;
+    }
+
+    public void SetValue(string key, string value)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT OR REPLACE INTO app_settings (key, value) VALUES ($key, $value)";
+        cmd.Parameters.AddWithValue("$key", key);
+        cmd.Parameters.AddWithValue("$value", value);
+        cmd.ExecuteNonQuery();
+    }
+
     public string GetOrCreateClientId()
     {
         using var conn = Open();

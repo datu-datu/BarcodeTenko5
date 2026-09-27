@@ -398,11 +398,26 @@ public partial class MainWindow : Window
             RewriteLiveBin();
             var path = BinWriter.FinalizeLive(_config.OutputDirectory, _location.Name);
             _store.MarkCompleted(pending.Select(r => r.Id), path);
+
+            // 点呼完了報告を最善努力で送信。オフライン時はあきらめる (再送しない)。
+            var reported = true;
+            try
+            {
+                await _api.CompleteSessionAsync(_sync.LastSessionId, pending.Count, System.IO.Path.GetFileName(path));
+            }
+            catch
+            {
+                reported = false;
+            }
+
             SetLastScan("受付中", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();
             UpdateSyncText();
             BinWriter.RevealInExplorer(path);
-            MessageBox.Show($"ありがとうございます。このファイルを提出してください。 \n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+            var reportText = reported
+                ? "サーバーに完了を報告しました。"
+                : "サーバーに完了を報告できませんでした（オフライン）。管理画面では未完了と表示されます。";
+            MessageBox.Show($"ありがとうございます。このファイルを提出してください。 \n{path}\n\n{reportText}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {

@@ -89,6 +89,24 @@
   }
 
   // --- セッション ---
+  // 未完了端末がいる場合に警告し、続行可否を返す。全完了/参加端末ゼロなら無警告で true。
+  async function confirmWithCompletions(sessionId, actionLabel) {
+    let c;
+    try {
+      c = await api(`/sessions/${sessionId}/completions`);
+    } catch {
+      return confirm(`完了状況を取得できませんでした。このままセッションを${actionLabel}しますか？`);
+    }
+    if (c.clientTotal === 0 || c.clientCompleted >= c.clientTotal) return true;
+    const lines = c.clients
+      .filter((x) => !x.completed)
+      .map((x) => `  ・${escapeHtml((x.locations || []).join('/') || '場所不明')} (clientID ${escapeHtml(String(x.clientId).slice(0, 8))}…)`)
+      .join('\n');
+    return confirm(
+      `点呼完了報告が出ていない端末があります:\n${lines}\n\n完了 ${c.clientCompleted} / ${c.clientTotal} 端末\n\nこのままセッションを${actionLabel}しますか？`
+    );
+  }
+
   async function loadSessions() {
     const sessions = await api('/sessions');
     const tbody = el('sessionTable').querySelector('tbody');
@@ -97,6 +115,9 @@
     const current = filter.value;
     filter.innerHTML = '<option value="">すべてのセッション</option><option value="0">(セッション未割当)</option>';
     for (const s of sessions) {
+      const clientBadge = s.clientTotal > 0
+        ? `<span class="badge ${s.clientCompleted >= s.clientTotal ? 'open' : 'deleted'}">${s.clientCompleted} / ${s.clientTotal}</span>`
+        : '<span class="muted">-</span>';
       const tr = document.createElement('tr');
       tr.innerHTML =
         `<td>${s.id}</td>` +
@@ -104,6 +125,7 @@
         `<td><span class="badge ${s.status}">${statusLabel(s.status)}</span></td>` +
         `<td class="num">${s.target_count}</td>` +
         `<td class="num">${s.count}</td>` +
+        `<td class="num">${clientBadge}</td>` +
         `<td class="muted">${fmtTime(s.started_at)}</td>` +
         `<td class="muted">${fmtTime(s.ended_at)}</td>`;
       const actions = document.createElement('td');
@@ -127,12 +149,16 @@
 
     tbody.querySelectorAll('[data-open]').forEach((b) =>
       b.addEventListener('click', async () => {
+        // 他セッションの開始は現在の open セッションを自動で閉じるため、未完了なら警告
+        const openNow = sessions.find((x) => x.status === 'open');
+        if (openNow && !(await confirmWithCompletions(openNow.id, '終了 (別セッション開始)'))) return;
         await api(`/sessions/${b.dataset.open}/open`, { method: 'POST' });
         await refreshAll();
       })
     );
     tbody.querySelectorAll('[data-close]').forEach((b) =>
       b.addEventListener('click', async () => {
+        if (!(await confirmWithCompletions(b.dataset.close, '終了'))) return;
         await api(`/sessions/${b.dataset.close}/close`, { method: 'POST' });
         await refreshAll();
       })
@@ -416,6 +442,9 @@
       if (scanOffset === 0 && !el('scanSearchInput').value.trim()) {
         loadScans(false).catch(() => {});
       }
+    });
+    es.addEventListener('completions', () => {
+      loadSessions().catch(() => {});
     });
     es.onopen = () => {
       el('conn').textContent = '接続中';
