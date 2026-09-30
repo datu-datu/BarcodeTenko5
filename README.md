@@ -113,7 +113,7 @@ systemd ユニットと Caddyfile のひな形は [`deploy/`](deploy/) にあり
 
 ### Teams Webhook 連携 (無料ワークフロー対応)
 
-`WEBHOOK_URL` に Microsoft Teams の無料ワークフロー（「Webhook 要求を受信したときにチャネルに投稿する」）の URL を設定すると、受付した点呼データをバッチ（複数件まとめ）で Teams チャネルへ Adaptive Card 形式で自動投稿します。
+`WEBHOOK_URL` に Power Automate の Teams Webhook トリガー（「Teams webhook 要求を受信したとき」）の URL を設定すると、受付した点呼データをバッチ（複数件まとめ）で送信します。ペイロードは最小 JSON（`records` 配列に学籍番号 `student_number`・点呼完了場所 `location`・スキャン時刻 `scan_time`）で、Power Automate 側で Apply to each を使って Teams チャットやチャネルへ個別に投稿できます。
 
 設定手順の詳細は [TEAMS_WEBHOOK_GUIDE.md](TEAMS_WEBHOOK_GUIDE.md) を参照してください。
 

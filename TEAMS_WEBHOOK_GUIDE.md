@@ -1,6 +1,6 @@
-# Microsoft Teams 連携マニュアル（完全無料・Teams ワークフロー対応）
+# Microsoft Teams 連携マニュアル（Power Automate・完全無料の Teams Webhook 対応）
 
-BarcodeTenko5 で受付した点呼データを、**有料の Power Automate ライセンスを使わず**、Microsoft Teams の標準機能（無料のワークフロー）を使ってチャネルへ自動通知する設定ガイドです。
+BarcodeTenko5 で受付した点呼データを、**有料の HTTP トリガーを使わず**、無料の **Teams Webhook トリガー**（「Teams webhook 要求を受信したとき」）で受け取り、Power Automate 側で Teams チャットやチャネルへ個別に送信するための設定ガイドです。
 
 ---
 
@@ -12,76 +12,127 @@ BarcodeTenko5 で受付した点呼データを、**有料の Power Automate ラ
          ▼ (スキャン受付)
 [BarcodeTenko サーバー]
          │  ★ 負荷軽減のため 10件たまるか、10秒経過でまとめて送信
-         ▼ (HTTP POST / Adaptive Card JSON)
-[Teams ワークフロー (無料)]
+         ▼ (HTTP POST / 最小 JSON)
+[Power Automate: Teams Webhook トリガー (無料)]
          │
-         ▼
-[Teams チャネルにカード形式で自動投稿！]
+         ▼ (Apply to each で1件ずつ処理)
+[Teams チャット / チャネルに個別投稿]
 ```
 
-### サーバーから送信される形式（Adaptive Card）
-サーバーは Teams ワークフローがネイティブに解釈できる **Adaptive Card 形式** で送信します。
-そのため、**Power Automate での複雑なフロー編集や JSON スキーマ設定は一切不要** です。
+### サーバーから送信される形式（最小 JSON）
 
-**【Teams チャネルでの実際の表示イメージ】**
+Adaptive Card は使わず、**学籍番号・点呼完了場所・スキャン時刻の 3 項目だけ** を `records` 配列で送ります。Power Automate 側で自由にメッセージ文面を組み立てられます。
+
+```json
+{
+  "records": [
+    {
+      "student_number": "23456",
+      "location": "体育館",
+      "scan_time": "2026-09-30T18:30:15.1234567+09:00"
+    },
+    {
+      "student_number": "23457",
+      "location": "場所未選択",
+      "scan_time": ""
+    }
+  ]
+}
 ```
-┌──────────────────────────────────────┐
-│ 📋 点呼受付 (2件)                     │
-│                                      │
-│ 学籍 23456    体育館 (18:30:15)      │
-│ 学籍 23457    体育館 (18:30:18)      │
-└──────────────────────────────────────┘
-```
+
+| フィールド | 内容 |
+|---|---|
+| `student_number` | 学籍番号（文字列） |
+| `location` | 点呼完了場所の名前。未選択の場合は `場所未選択` |
+| `scan_time` | クライアントのスキャン時刻（ISO 8601 形式）。古いデータ等で未設定の場合は空文字列 `""` |
 
 ---
 
-## 2. Teams 側での設定手順（3分で完了・完全無料）
+## 2. Power Automate 側での設定手順（無料の Teams Webhook トリガー）
 
-有料の Power Automate 管理画面を開く必要はありません。**Teams アプリ内だけで完結** します。
+有料の「HTTP 要求を受信したとき」トリガーは **使いません**。Teams の標準機能（無料）で完結します。
 
-### ステップ 1: チャネルの「ワークフロー」を開く
-1. Microsoft Teams を開きます。
-2. 点呼通知を受け取りたいチャネル（例: `一般` や `点呼連絡`）の横にある **「…」（その他のオプション）** をクリックします。
-3. メニューから **「ワークフロー」** を選択します。
-   *(※見当たらない場合は、左メニューの「アプリ」から「Workflows（ワークフロー）」を検索して開いてください)*
+### ステップ 1: Teams のワークフローでフローを作成
 
----
+1. Microsoft Teams を開き、左メニューの **「…」→「ワークフロー」**（Workflows）を開きます。
+2. **「作成」** から **「空白から作成」**（カスタムフロー）を選びます。
+   - テンプレート「Webhook 要求を受信したときにチャネルに投稿する」をベースに編集しても構いません。
 
-### ステップ 2: テンプレートを選択
-1. 検索窓に **「webhook」** と入力します。
-2. テンプレート一覧から **「Webhook 要求を受信したときにチャネルに投稿する」**（英語名: *Post to a channel when a webhook request is received* または *Send webhook alerts to a channel*）をクリックします。
+### ステップ 2: トリガーを設定
 
----
+1. トリガーとして **「Teams webhook 要求を受信したとき」**（*When a Teams webhook request is received*）を選択します（Teams コネクタ・標準＝無料）。
+2. **「要求本文の JSON スキーマ」** に以下を貼り付けます（「サンプルのペイロードを使用してスキーマを生成」に上記の送信 JSON 例を貼り付けても同じ結果になります）：
 
-### ステップ 3: ワークフローを追加して URL を取得
-1. 接続アカウント（Teams）に緑のチェックが付いていることを確認し、**「次へ」** をクリックします。
-2. 設定画面で以下を確認します：
-   - **チーム**: 通知を送りたいチームを選択
-   - **チャネル**: 対象のチャネルを選択
-3. **「ワークフローを追加」** をクリックします。
-4. 画面に **Webhook URL**（`https://prod-xx...`）が表示されます。
-   👉 **この URL を「コピー」ボタンで控えてください**（サーバーの設定で使用します）。
-5. **「完了」** をクリックします。
+```json
+{
+  "type": "object",
+  "properties": {
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "student_number": { "type": "string" },
+          "location": { "type": "string" },
+          "scan_time": { "type": "string" }
+        },
+        "required": ["student_number", "location", "scan_time"]
+      }
+    }
+  },
+  "required": ["records"]
+}
+```
+
+### ステップ 3: 1件ずつ処理するアクションを追加
+
+1. アクション **「すべて適用 (Apply to each)」** を追加し、出力にトリガーの **`records`** を選択します。
+2. ループの中に、送り先に応じた投稿アクションを追加します：
+   - **チャットに個別送信**: 「Teams でチャットまたはチャネルにメッセージを投稿する」→ 投稿先に「自分とのチャット」やグループチャットを選択
+   - **チャネルに投稿**: 投稿先に「チャネル」を選択し、チーム／チャネルを指定
+3. メッセージ本文に **`student_number` / `location` / `scan_time`** の動的コンテンツを使って文面を組み立てます。例：
+
+```
+点呼受付: 学籍 student_number / 場所 location / 時刻 scan_time
+```
+
+時刻を見やすくしたい場合は、式で `formatDateTime` が使えます（クライアント PC の時刻が JST (+09:00) で送信される前提）：
+
+```
+formatDateTime(items('Apply_to_each')?['scan_time'], 'yyyy/MM/dd HH:mm:ss')
+```
+
+### ステップ 4: 保存して URL を取得
+
+1. フローを **保存** すると、トリガーに **Webhook URL**（`https://prod-xx.japaneast.logic.azure.com:443/workflows/xxxx/...`）が発行されます。
+2. 👉 この URL をコピーして控えてください（サーバーの設定で使用します）。
 
 ---
 
 ## 3. サーバー側（`.env`）の設定
 
-1. サーバーの `server/.env` をテキストエディタで開きます。
-2. `WEBHOOK_URL` に、先ほどコピーした Teams ワークフローの URL を貼り付けます：
+サーバーの `server/.env` をテキストエディタで開きます。
 
 ```env
-# Teams ワークフローでコピーした URL
-WEBHOOK_URL=https://prod-xx.japaneast.logic.azure.com:443/workflows/xxxxxx/triggers/manual/paths/invoke?...
+# Power Automate (Teams Webhook トリガー) で発行された URL
+WEBHOOK_URL=https://prod-xx.japaneast.logic.azure.com:443/workflows/xxxxxx/...
 
 # 任意: 1回にまとめて送る最大件数 (既定: 10)
 WEBHOOK_BATCH_SIZE=10
 
 # 任意: スキャンが途絶えてから何秒後にまとめて送るか (既定: 10000ms = 10秒)
 WEBHOOK_IDLE_MS=10000
+
+# 任意: 共有シークレット。設定すると X-Webhook-Secret ヘッダーとして送信される
+WEBHOOK_SECRET=your-secret-string
 ```
 
-3. サーバーを起動（または再起動）します。
+設定後、サーバーを起動（または再起動）します。
+
+### `X-Webhook-Secret` について
+
+`WEBHOOK_SECRET` を設定すると、すべての Webhook 送信に `X-Webhook-Secret: <値>` ヘッダーが付きます。
+**Teams Webhook トリガーは受信リクエストのヘッダー検証ができないため、現状このヘッダーは検証には使えません。** 将来、ヘッダー検証が可能な別エンドポイントに差し替える場合に備えて送信は維持されます（Teams Webhook 側は無視するだけで動作に影響はありません）。
 
 ---
 
@@ -93,14 +144,14 @@ WEBHOOK_IDLE_MS=10000
    - **自動送信**: `ON` になっていること
 3. 点呼クライアントソフトで 1〜2 件スキャンを行います。
 4. すぐにテストしたい場合は、管理画面の **「今すぐ送信」** ボタンをクリックします。
-5. 数秒後に Teams のチャネルへ、上記のような綺麗な **「点呼受付 (○件)」カード** が投稿されれば成功です！
+5. Power Automate のフロー実行履歴にトリガーが記録され、設定した投稿先（チャット／チャネル）へ 1件ずつメッセージが届けば成功です。
 
 ---
 
 ## 5. 運用の Tips
 
 - **通知が多すぎる場合**:
-  受付が多い時間帯に Teams の通知音を減らしたい場合は、`.env` の `WEBHOOK_BATCH_SIZE=20` や `WEBHOOK_IDLE_MS=30000`（30秒）のように設定すると、まとめて1通のカードで届くため通知の氾濫を防げます。
+  `.env` の `WEBHOOK_BATCH_SIZE=20` や `WEBHOOK_IDLE_MS=30000`（30秒）にすると、Webhook 呼び出し回数を減らせます（1リクエストの `records` 件数が増えるだけで、Power Automate 側の1件ずつ投稿の動作は変わりません）。
 - **一時停止**:
   管理画面（`/admin`）のスイッチを `OFF` にするだけで、いつでも通知を一時停止できます。停止中もデータはサーバー内に蓄積され、`ON` に戻した際や「今すぐ送信」を押した際にまとめて送信されます。
 

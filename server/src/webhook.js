@@ -5,6 +5,8 @@ const { db, nowIso } = require('./db');
 
 // 受付したスキャンを Webhook (Power Automate の Teams Webhook) へ転送する。
 // 負荷軽減のため、BATCH_SIZE 件たまるか、最後の受付から IDLE_MS 経過したら 1 つの Webhook にまとめて送る。
+// ペイロードは { records: [{ student_number, location, scan_time }] } の最小 JSON。
+// Power Automate 側で Apply to each でループし、チャット等へ個別に投稿する想定。
 // 自動送信は管理画面から停止でき、その場合も未送信分は保持され、手動送信で送れる。
 
 const lastResult = { lastSentAt: null, lastError: null };
@@ -57,45 +59,17 @@ function locationNameMap() {
   return map;
 }
 
-function fmtJstTime(iso) {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false });
-  } catch {
-    return iso;
-  }
-}
-
 async function sendBatch(records) {
   const names = locationNameMap();
 
-  // Microsoft Teams ワークフロー (無料の Teams Webhook) が要求する Adaptive Card 形式
+  // Power Automate (Teams Webhook トリガー) 向けの最小 JSON。
+  // scan_time はクライアントが送信した client_time (ISO 8601) をそのまま使う。
   const payload = {
-    type: 'AdaptiveCard',
-    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-    version: '1.4',
-    body: [
-      {
-        type: 'TextBlock',
-        text: `点呼受付 (${records.length}件)`,
-        weight: 'Bolder',
-        size: 'Medium',
-        color: 'Accent'
-      },
-      {
-        type: 'FactSet',
-        facts: records.map((r) => {
-          const loc = (r.location_id != null ? names.get(r.location_id) : null) || '場所未選択';
-          // 表示はクライアントのスキャン時刻。未設定(NULL)なら括弧なしで場所名のみ。
-          const scanTime = fmtJstTime(r.client_time);
-          return {
-            title: `学籍 ${r.student_number}`,
-            value: scanTime ? `${loc} (${scanTime})` : loc
-          };
-        })
-      }
-    ]
+    records: records.map((r) => ({
+      student_number: r.student_number,
+      location: (r.location_id != null ? names.get(r.location_id) : null) || '場所未選択',
+      scan_time: r.client_time || ''
+    }))
   };
 
   const headers = { 'Content-Type': 'application/json' };
