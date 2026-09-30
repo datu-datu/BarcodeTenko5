@@ -410,7 +410,7 @@ public partial class MainWindow : Window
                 reported = false;
             }
 
-            SetLastScan("受付中", (Brush)FindResource("TextSecondaryBrush"));
+            SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();
             UpdateSyncText();
             BinWriter.RevealInExplorer(path);
@@ -450,7 +450,7 @@ public partial class MainWindow : Window
 
             _lastStudentNumber = -1;
 
-            SetLastScan("受付中", (Brush)FindResource("TextSecondaryBrush"));
+            SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();
             UpdateSyncText();
         }

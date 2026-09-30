@@ -136,7 +136,8 @@
                         </Style>
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="時刻" Binding="{Binding TimeText}" Width="110"/>
+                        <DataGridTextColumn Header="スキャン時刻" Binding="{Binding TimeText}" Width="110"/>
+                        <DataGridTextColumn Header="受信時刻" Binding="{Binding ReceivedText}" Width="110"/>
                         <DataGridTextColumn Header="点呼場所" Binding="{Binding LocationName}" Width="110"/>
                         <DataGridTextColumn Header="学籍番号" Binding="{Binding StudentNumberText}" Width="90">
                             <DataGridTextColumn.ElementStyle>

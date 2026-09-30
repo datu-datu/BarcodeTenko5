@@ -252,7 +252,7 @@ router.get('/sessions/:id/csv', (req, res) => {
   const rows = db
     .prepare(
       `SELECT a.id, a.student_number, l.name AS location_name, s.name AS session_name,
-              a.received_at, a.deleted, a.deleted_at
+              a.client_time, a.received_at, a.deleted, a.deleted_at
          FROM attendance a
          LEFT JOIN locations l ON l.id = a.location_id
          LEFT JOIN sessions  s ON s.id = a.session_id
@@ -286,7 +286,7 @@ router.get('/sessions/:id/csv', (req, res) => {
     return `"${str.replace(/"/g, '""')}"`;
   }
 
-  const header = ['ID', '学籍番号', '点呼場所', 'セッション名', '受付日時', '状態', '取消日時'];
+  const header = ['ID', '学籍番号', '点呼場所', 'セッション名', 'スキャン時刻', '受付日時', '状態', '取消日時'];
   const lines = [header.map(csvEscape).join(',')];
 
   for (const r of rows) {
@@ -295,6 +295,7 @@ router.get('/sessions/:id/csv', (req, res) => {
       r.student_number,
       csvEscape(r.location_name || '場所未選択'),
       csvEscape(r.session_name || session.name),
+      csvEscape(formatJst(r.client_time)),
       csvEscape(formatJst(r.received_at)),
       csvEscape(r.deleted ? '取消' : '有効'),
       csvEscape(formatJst(r.deleted_at))

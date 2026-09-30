@@ -21,6 +21,7 @@ function scanEvent(row, locationName) {
     sessionId: row.session_id,
     locationId: row.location_id,
     locationName: locationName || null,
+    clientTime: row.client_time,
     receivedAt: row.received_at
   };
 }

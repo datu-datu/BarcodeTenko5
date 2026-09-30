@@ -525,7 +525,8 @@ public partial class MainWindow : Window
         {
             AttendanceId = scan.Id,
             StudentNumber = scan.StudentNumber,
-            TimeText = FormatTime(scan.ReceivedAt),
+            TimeText = FormatTime(scan.ClientTime),
+            ReceivedText = FormatTime(scan.ReceivedAt),
             LocationName = string.IsNullOrEmpty(scan.LocationName) ? "場所未選択" : scan.LocationName!,
             IsRecentlyAdded = true,
             HighlightUntil = DateTime.Now + HighlightDuration
@@ -562,7 +563,8 @@ public partial class MainWindow : Window
         {
             AttendanceId = scan.Id,
             StudentNumber = scan.StudentNumber,
-            TimeText = FormatTime(scan.ReceivedAt),
+            TimeText = FormatTime(scan.ClientTime),
+            ReceivedText = FormatTime(scan.ReceivedAt),
             LocationName = string.IsNullOrEmpty(scan.LocationName) ? "場所未選択" : scan.LocationName!,
             IsRecentlyAdded = recentlyAdded
         };

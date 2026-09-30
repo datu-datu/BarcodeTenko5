@@ -61,7 +61,7 @@
       if (it.cancelled) li.className = 'cancelled';
       li.innerHTML =
         `<span class="loc">${escapeHtml(it.locationName || '場所未選択')}</span>` +
-        `<span class="time">${fmtTime(it.receivedAt)}</span>` +
+        `<span class="time">${fmtTime(it.clientTime)}</span>` +
         (it.cancelled ? '<span class="tag">取消</span>' : '');
       feed.appendChild(li);
     }

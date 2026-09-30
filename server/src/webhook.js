@@ -87,10 +87,11 @@ async function sendBatch(records) {
         type: 'FactSet',
         facts: records.map((r) => {
           const loc = (r.location_id != null ? names.get(r.location_id) : null) || '場所未選択';
-          const timeStr = fmtJstTime(r.received_at);
+          // 表示はクライアントのスキャン時刻。未設定(NULL)なら括弧なしで場所名のみ。
+          const scanTime = fmtJstTime(r.client_time);
           return {
             title: `学籍 ${r.student_number}`,
-            value: `${loc} (${timeStr})`
+            value: scanTime ? `${loc} (${scanTime})` : loc
           };
         })
       }

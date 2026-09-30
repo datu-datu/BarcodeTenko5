@@ -7,6 +7,7 @@ public sealed class ViewerRow : INotifyPropertyChanged
 {
     private int _studentNumber;
     private string _timeText = "";
+    private string _receivedText = "";
     private string _locationName = "";
     private string _className = "";
     private string _name = "";
@@ -32,6 +33,12 @@ public sealed class ViewerRow : INotifyPropertyChanged
     {
         get => _timeText;
         set => SetField(ref _timeText, value);
+    }
+
+    public string ReceivedText
+    {
+        get => _receivedText;
+        set => SetField(ref _receivedText, value);
     }
 
     public string LocationName
@@ -66,6 +73,7 @@ public sealed class ViewerRow : INotifyPropertyChanged
     {
         StudentNumber = other.StudentNumber;
         TimeText = other.TimeText;
+        ReceivedText = other.ReceivedText;
         LocationName = other.LocationName;
         ClassName = other.ClassName;
         Name = other.Name;

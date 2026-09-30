@@ -60,7 +60,7 @@
 
                         <!-- 直前の受付結果（枠なし1行） -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0" Height="24">
-                            <TextBlock x:Name="LastScanStatusText" Text="受付中" FontSize="14"
+                            <TextBlock x:Name="LastScanStatusText" Text="" FontSize="14"
                                        VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
                             <TextBlock x:Name="LastScanNumberText" Text="" FontSize="16" FontWeight="Bold"
                                        FontFamily="Consolas" VerticalAlignment="Center" Margin="6,0,0,0"

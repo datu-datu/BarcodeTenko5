@@ -297,6 +297,7 @@
       `<td class="num">${r.student_number}</td>` +
       `<td>${escapeHtml(r.location_name || '場所未選択')}</td>` +
       `<td>${escapeHtml(r.session_name || '(未割当)')}</td>` +
+      `<td class="muted">${fmtTime(r.client_time)}</td>` +
       `<td class="muted">${fmtTime(r.received_at)}</td>` +
       `<td>${sentBadge}</td>` +
       `<td>${r.deleted ? `<span class="badge deleted">取消 ${fmtTime(r.deleted_at)}</span>` : '<span class="badge open">有効</span>'}</td>`;
@@ -329,7 +330,7 @@
       tbody.innerHTML = '';
       el('scanSelectAll').checked = false;
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center; padding:16px;">該当するデータはありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center; padding:16px;">該当するデータはありません</td></tr>';
       }
     }
 

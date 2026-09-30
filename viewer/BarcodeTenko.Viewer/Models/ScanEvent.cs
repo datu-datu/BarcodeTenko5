@@ -8,6 +8,7 @@ public sealed class ScanEvent
     public int? SessionId { get; set; }
     public int? LocationId { get; set; }
     public string? LocationName { get; set; }
+    public string? ClientTime { get; set; }
     public string? ReceivedAt { get; set; }
 }
 
