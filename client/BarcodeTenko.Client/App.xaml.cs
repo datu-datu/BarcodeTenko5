@@ -65,9 +65,9 @@ public partial class App : Application
             return;
         }
 
-        // 前回選択した点呼場所が data フォルダーに記録されていれば選択画面をスキップする。
+        // 前回選択した点呼場所が client.db に記録されていれば選択画面をスキップする。
         // サーバ側の一覧に存在しない場所が記録されていた場合は選択画面に戻す。
-        var saved = LocationStore.Load(config);
+        var saved = store.LoadLocation();
         var selected = saved is not null
             ? locations.FirstOrDefault(l => l.Id == saved.Id)
             : null;
@@ -82,7 +82,7 @@ public partial class App : Application
             }
 
             selected = selectWindow.SelectedLocation;
-            LocationStore.Save(config, selected);
+            store.SaveLocation(selected);
         }
 
         _sync = new SyncService(store, api);

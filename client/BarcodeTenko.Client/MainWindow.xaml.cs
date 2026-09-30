@@ -275,7 +275,7 @@ public partial class MainWindow : Window
         }
 
         _location = selectWindow.SelectedLocation;
-        LocationStore.Save(_config, _location);
+        _store.SaveLocation(_location);
         LocationText.Text = _location.Name;
         InputBox.Focus();
     }

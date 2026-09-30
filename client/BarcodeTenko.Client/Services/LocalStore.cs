@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using BarcodeTenko.Client.Models;
 
@@ -92,6 +93,36 @@ CREATE TABLE IF NOT EXISTS app_settings (
         insert.Parameters.AddWithValue("$value", id);
         insert.ExecuteNonQuery();
         return id;
+    }
+
+    /// <summary>
+    /// 前回選択した点呼場所を app_settings から読み込む。
+    /// 未保存・破損・Id 不正の場合は null を返し、呼び出し側で選択画面に戻す。
+    /// </summary>
+    public Location? LoadLocation()
+    {
+        try
+        {
+            var json = GetValue("location");
+            if (string.IsNullOrEmpty(json))
+            {
+                return null;
+            }
+
+            var location = JsonSerializer.Deserialize<Location>(json);
+            return location is { Id: > 0 } ? location : null;
+        }
+        catch
+        {
+            // 壊れた値は無視して選択画面に戻す
+            return null;
+        }
+    }
+
+    /// <summary>選択した点呼場所を app_settings に保存する。</summary>
+    public void SaveLocation(Location location)
+    {
+        SetValue("location", JsonSerializer.Serialize(location));
     }
 
     public void AddScan(ScanRecord record)
