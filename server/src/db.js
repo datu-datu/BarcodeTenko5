@@ -87,4 +87,9 @@ ensureColumn('attendance', 'webhook_sent', 'INTEGER NOT NULL DEFAULT 0');
 
 const nowIso = () => new Date().toISOString();
 
-module.exports = { db, nowIso };
+// 現在オープン中のセッション (同時に開けるのは1つ)
+function getOpenSession() {
+  return db.prepare("SELECT * FROM sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
+}
+
+module.exports = { db, nowIso, getOpenSession };

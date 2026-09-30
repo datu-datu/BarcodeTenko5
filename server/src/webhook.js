@@ -1,7 +1,7 @@
 'use strict';
 
 const config = require('./config');
-const { db, nowIso } = require('./db');
+const { db, nowIso, getOpenSession } = require('./db');
 
 // 受付したスキャンを Webhook (Power Automate の Teams Webhook) へ転送する。
 // 負荷軽減のため、BATCH_SIZE 件たまるか、最後の受付から IDLE_MS 経過したら 1 つの Webhook にまとめて送る。
@@ -28,19 +28,24 @@ function setEnabled(enabled) {
   ).run(enabled ? '1' : '0');
 }
 
-// 自動送信の対象はセッション内の受付のみ (セッション外は session_id が NULL のため除外)
+// 自動送信の対象は現在オープン中のセッションの受付のみ。
+// セッション外(session_id が NULL)と過去セッションの未送信は、管理画面の選択送信でのみ送る。
 function pendingCount() {
+  const session = getOpenSession();
+  if (!session) return 0;
   return db
-    .prepare('SELECT COUNT(*) AS c FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id IS NOT NULL')
-    .get().c;
+    .prepare('SELECT COUNT(*) AS c FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id = ?')
+    .get(session.id).c;
 }
 
 function getUnsent(limit) {
+  const session = getOpenSession();
+  if (!session) return [];
   return db
     .prepare(
-      'SELECT * FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id IS NOT NULL ORDER BY id LIMIT ?'
+      'SELECT * FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id = ? ORDER BY id LIMIT ?'
     )
-    .all(limit);
+    .all(session.id, limit);
 }
 
 function markSent(ids) {
@@ -172,7 +177,7 @@ async function sendOneBatch(triggerType = 'auto', records = null) {
   }
 }
 
-// 未送信をすべて送る (手動送信用)
+// 現在のセッションの未送信をすべて送る (手動送信用)
 async function flushAll(maxBatches = 200) {
   if (!config.webhookUrl) return { sent: 0, reason: 'no_url' };
   if (sending) return { sent: 0, reason: 'busy' };
@@ -197,7 +202,9 @@ async function sendSelected(ids) {
   if (!config.webhookUrl) return { sent: 0, reason: 'no_url' };
   if (sending) return { sent: 0, reason: 'busy' };
 
-  const list = (Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isInteger(n));
+  const list = Array.from(
+    new Set((Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))
+  ).slice(0, 10000);
   if (list.length === 0) return { sent: 0, reason: 'no_records' };
 
   const placeholders = list.map(() => '?').join(',');
@@ -227,6 +234,9 @@ async function tick() {
   if (!isEnabled()) return;
   if (sending || Date.now() < retryAt) return;
 
+  const session = getOpenSession();
+  if (!session) return;
+
   const total = pendingCount();
   if (total === 0) return;
 
@@ -242,9 +252,9 @@ async function tick() {
 
   const last = db
     .prepare(
-      'SELECT MAX(received_at) AS m FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id IS NOT NULL'
+      'SELECT MAX(received_at) AS m FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id = ?'
     )
-    .get().m;
+    .get(session.id).m;
   if (last && Date.now() - Date.parse(last) >= config.webhookIdleMs) {
     sending = true;
     try {

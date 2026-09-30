@@ -315,12 +315,14 @@ router.get('/sessions/:id/csv', (req, res) => {
 });
 
 // --- スキャン一覧 ---
-router.get('/scans', (req, res) => {
-  const includeDeleted = req.query.includeDeleted === '1' || req.query.includeDeleted === 'true';
-  const sessionFilter = req.query.sessionId !== undefined && req.query.sessionId !== '' ? Number(req.query.sessionId) : null;
-  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-  const offset = Math.max(Number(req.query.offset) || 0, 0);
+// 受付データ一覧のフィルタ条件を組み立てる (GET /scans と GET /scans/ids で共用)
+function buildScanWhere(query) {
+  const includeDeleted = query.includeDeleted === '1' || query.includeDeleted === 'true';
+  const sessionFilter =
+    query.sessionId !== undefined && query.sessionId !== '' && Number.isInteger(Number(query.sessionId))
+      ? Number(query.sessionId)
+      : null;
+  const q = typeof query.q === 'string' ? query.q.trim() : '';
 
   const conditions = [];
   const params = [];
@@ -337,7 +339,83 @@ router.get('/scans', (req, res) => {
     conditions.push('CAST(a.student_number AS TEXT) LIKE ?');
     params.push(`%${q}%`);
   }
-  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  return { where: conditions.length ? 'WHERE ' + conditions.join(' AND ') : '', params };
+}
+
+// 選択送信・取消・復元で扱う ID の上限と分割幅 (SQLite のバインド変数上限対策)
+const SCAN_ID_LIMIT = 10000;
+const UPDATE_CHUNK_SIZE = 500;
+
+function normalizeIds(ids) {
+  const list = (Array.isArray(ids) ? ids : [])
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return Array.from(new Set(list)).slice(0, SCAN_ID_LIMIT);
+}
+
+function runChunkedUpdate(ids, updateChunk) {
+  const tx = db.transaction((list) => {
+    let changes = 0;
+    for (let i = 0; i < list.length; i += UPDATE_CHUNK_SIZE) {
+      changes += updateChunk(list.slice(i, i + UPDATE_CHUNK_SIZE));
+    }
+    return changes;
+  });
+  return tx(ids);
+}
+
+// フィルタ条件に一致する未送信レコードの ID 一覧 (「未送信をすべて選択」用)
+router.get('/scans/ids', (req, res) => {
+  const { where, params } = buildScanWhere({ ...req.query, includeDeleted: '0' });
+  const fullWhere = where ? `${where} AND a.webhook_sent = 0` : 'WHERE a.webhook_sent = 0';
+
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM attendance a ${fullWhere}`).get(...params).c;
+  const ids = db
+    .prepare(`SELECT a.id FROM attendance a ${fullWhere} ORDER BY a.id DESC LIMIT ?`)
+    .all(...params, SCAN_ID_LIMIT)
+    .map((r) => r.id);
+
+  res.json({ ids, total });
+});
+
+// 選択した受付データをまとめて取り消す (論理削除。未送信なら送信対象からも外れる)
+router.post('/scans/cancel', (req, res) => {
+  const ids = normalizeIds((req.body || {}).ids);
+  if (ids.length === 0) return res.status(400).json({ error: 'ids is required' });
+
+  const cancelled = runChunkedUpdate(ids, (chunk) => {
+    const placeholders = chunk.map(() => '?').join(',');
+    return db
+      .prepare(`UPDATE attendance SET deleted = 1, deleted_at = ? WHERE deleted = 0 AND id IN (${placeholders})`)
+      .run(nowIso(), ...chunk).changes;
+  });
+
+  broadcastStats();
+  if (cancelled > 0) events.broadcast('cancel', { ids });
+  res.json({ cancelled });
+});
+
+// 選択した取消済みデータを復元する
+router.post('/scans/restore', (req, res) => {
+  const ids = normalizeIds((req.body || {}).ids);
+  if (ids.length === 0) return res.status(400).json({ error: 'ids is required' });
+
+  const restored = runChunkedUpdate(ids, (chunk) => {
+    const placeholders = chunk.map(() => '?').join(',');
+    return db
+      .prepare(`UPDATE attendance SET deleted = 0, deleted_at = NULL WHERE deleted = 1 AND id IN (${placeholders})`)
+      .run(...chunk).changes;
+  });
+
+  broadcastStats();
+  if (restored > 0) events.broadcast('cancel', { ids, restored: true });
+  res.json({ restored });
+});
+
+router.get('/scans', (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  const { where, params } = buildScanWhere(req.query);
 
   const total = db.prepare(`SELECT COUNT(*) AS c FROM attendance a ${where}`).get(...params).c;
 

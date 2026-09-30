@@ -278,9 +278,12 @@
   const selectedScanIds = new Set();
 
   function updateScanSelection() {
-    const checked = el('scanTable').querySelectorAll('.scan-row-check:checked').length;
-    el('scanSelectedInfo').textContent = `選択: ${checked} 件`;
-    el('scanSendBtn').disabled = checked === 0;
+    const count = selectedScanIds.size;
+    el('scanSelectedInfo').textContent = `選択: ${count} 件`;
+    const disabled = count === 0;
+    el('scanSendBtn').disabled = disabled;
+    el('scanCancelBtn').disabled = disabled;
+    el('scanRestoreBtn').disabled = disabled;
   }
 
   function appendScanRow(tbody, r) {
@@ -290,9 +293,8 @@
       ? '<span class="badge open">送信済</span>'
       : '<span class="badge idle">未送信</span>';
     const checked = selectedScanIds.has(r.id) ? ' checked' : '';
-    const disabled = r.deleted ? ' disabled' : '';
     tr.innerHTML =
-      `<td><input type="checkbox" class="scan-row-check" data-id="${r.id}"${checked}${disabled}></td>` +
+      `<td><input type="checkbox" class="scan-row-check" data-id="${r.id}"${checked}></td>` +
       `<td>${r.id}</td>` +
       `<td class="num">${r.student_number}</td>` +
       `<td>${escapeHtml(r.location_name || '場所未選択')}</td>` +
@@ -380,6 +382,68 @@
     try {
       const result = await api('/webhook/send', { method: 'POST', body: JSON.stringify({ ids }) });
       alert(result.sent > 0 ? `送信しました: ${result.sent} 件` : `送信できませんでした (${result.reason || '不明'})`);
+      selectedScanIds.clear();
+      await loadScans(false);
+      await loadWebhook();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      updateScanSelection();
+    }
+  });
+
+  // 現在の検索条件に一致する未送信データをサーバ側で全件選択する (表示中ページに限らない)
+  el('scanSelectUnsentBtn').addEventListener('click', async () => {
+    const params = new URLSearchParams();
+    const sessionId = el('scanSessionFilter').value;
+    const q = el('scanSearchInput').value.trim();
+    if (sessionId !== '') params.set('sessionId', sessionId);
+    if (q) params.set('q', q);
+
+    try {
+      const res = await api('/scans/ids?' + params.toString());
+      const ids = Array.isArray(res.ids) ? res.ids : [];
+      for (const id of ids) selectedScanIds.add(id);
+      el('scanTable')
+        .querySelectorAll('.scan-row-check')
+        .forEach((check) => {
+          if (selectedScanIds.has(Number(check.dataset.id))) check.checked = true;
+        });
+      updateScanSelection();
+      if (res.total !== undefined && res.total > ids.length) {
+        alert(`未送信が多すぎるため ${ids.length} 件のみ選択しました (対象 ${res.total} 件)。`);
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  el('scanCancelBtn').addEventListener('click', async () => {
+    const ids = Array.from(selectedScanIds);
+    if (ids.length === 0) return;
+    if (!confirm(`選択した ${ids.length} 件を取り消しますか？ (未送信の場合は送信対象からも外れます)`)) return;
+    el('scanCancelBtn').disabled = true;
+    try {
+      const result = await api('/scans/cancel', { method: 'POST', body: JSON.stringify({ ids }) });
+      alert(`取り消しました: ${result.cancelled} 件`);
+      selectedScanIds.clear();
+      await loadScans(false);
+      await loadWebhook();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      updateScanSelection();
+    }
+  });
+
+  el('scanRestoreBtn').addEventListener('click', async () => {
+    const ids = Array.from(selectedScanIds);
+    if (ids.length === 0) return;
+    if (!confirm(`選択した ${ids.length} 件の取消を復元しますか？`)) return;
+    el('scanRestoreBtn').disabled = true;
+    try {
+      const result = await api('/scans/restore', { method: 'POST', body: JSON.stringify({ ids }) });
+      alert(`復元しました: ${result.restored} 件`);
       selectedScanIds.clear();
       await loadScans(false);
       await loadWebhook();

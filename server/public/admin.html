@@ -74,7 +74,7 @@
       <h2>Power Automate 連携 (Teams Webhook)</h2>
       <div class="inline">
         <label class="muted"><input type="checkbox" id="webhookEnabled"> 自動送信を有効にする</label>
-        <button id="webhookFlush" class="primary" type="button" title="セッション内の未送信データをまとめて送信します">今すぐ送信</button>
+        <button id="webhookFlush" class="primary" type="button" title="現在のセッションの未送信データをまとめて送信します">今すぐ送信</button>
         <span id="webhookPending" class="muted"></span>
         <span id="webhookUrlState" class="muted"></span>
       </div>
@@ -110,6 +110,9 @@
       </form>
       <div class="inline" style="margin: 8px 0; align-items: center;">
         <button id="scanSendBtn" class="primary" type="button" disabled>選択したデータを送信</button>
+        <button id="scanCancelBtn" class="small danger" type="button" disabled>選択したデータを取り消す</button>
+        <button id="scanRestoreBtn" class="small" type="button" disabled>選択した取消を復元</button>
+        <button id="scanSelectUnsentBtn" class="small" type="button" title="現在の検索条件に一致する未送信データをすべて選択します">未送信をすべて選択</button>
         <span id="scanSelectedInfo" class="muted">選択: 0 件</span>
       </div>
       <table id="scanTable">
