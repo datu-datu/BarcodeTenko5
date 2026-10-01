@@ -418,6 +418,32 @@ public partial class MainWindow : Window
                 ? ""
                 : "";
             MessageBox.Show($"ありがとうございます。このファイルを提出してください。 \n{path}\n\n{reportText}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            // 1. client.db 上の点呼場所をクリア (次回起動時にも選択画面が出るようにする)
+            _store.ClearLocation();
+
+            // 2. 次の点呼場所を選択する画面を表示
+            var selectWindow = new LocationSelectWindow(_locations)
+            {
+                Owner = this
+            };
+
+            if (selectWindow.ShowDialog() == true && selectWindow.SelectedLocation is not null)
+            {
+                // 新しい場所が選択された場合：状態を更新して次の点呼待機
+                _location = selectWindow.SelectedLocation;
+                _store.SaveLocation(_location);
+                LocationText.Text = _location.Name;
+                _lastStudentNumber = -1;
+                SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
+                RefreshRecent();
+                UpdateSyncText();
+            }
+            else
+            {
+                // キャンセルされた場合：今回の業務完了としてアプリを正常終了
+                Application.Current.Shutdown();
+            }
         }
         catch (Exception ex)
         {

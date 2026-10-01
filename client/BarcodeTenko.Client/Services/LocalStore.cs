@@ -119,6 +119,22 @@ CREATE TABLE IF NOT EXISTS app_settings (
         }
     }
 
+    /// <summary>指定された設定キーを app_settings から削除する。</summary>
+    public void DeleteValue(string key)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM app_settings WHERE key = $key";
+        cmd.Parameters.AddWithValue("$key", key);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>保存されている点呼場所設定をクリアする（次回起動時または完了後に再選択を促すため）。</summary>
+    public void ClearLocation()
+    {
+        DeleteValue("location");
+    }
+
     /// <summary>選択した点呼場所を app_settings に保存する。</summary>
     public void SaveLocation(Location location)
     {
