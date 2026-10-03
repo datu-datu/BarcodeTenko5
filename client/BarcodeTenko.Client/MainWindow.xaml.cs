@@ -367,7 +367,8 @@ public partial class MainWindow : Window
                     "「キャンセル」: 完了処理を中断",
                     "未送信データがあります",
                     MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Warning);
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.Cancel);
 
                 if (res == MessageBoxResult.Yes)
                 {
@@ -386,7 +387,7 @@ public partial class MainWindow : Window
         }
 
         var message = $"{pending.Count} 件の点呼データを確定し、提出用ファイルを出力します。\nよろしいですか？";
-        if (MessageBox.Show(message, "点呼完了", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        if (MessageBox.Show(message, "点呼完了", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK)
         {
             InputBox.Focus();
             return;
@@ -457,11 +458,20 @@ public partial class MainWindow : Window
 
     private void DeleteAll_Click(object sender, RoutedEventArgs e)
     {
+        var pendingCount = _store.CountPending();
+        if (pendingCount == 0)
+        {
+            MessageBox.Show("削除対象の未確定データはありません。", "点呼データの削除", MessageBoxButton.OK, MessageBoxImage.Information);
+            InputBox.Focus();
+            return;
+        }
+
         var answer = MessageBox.Show(
-            "すべての点呼履歴と累計データを削除しますか？\nこの操作は元に戻せません。",
-            "全履歴の削除",
+            $"現在表示中の未完了点呼データ（{pendingCount}件）をすべて削除しますか？\n\n※ 過去に「点呼完了」したデータは削除されません。\n※ この操作は元に戻せません。",
+            "点呼データの削除",
             MessageBoxButton.OKCancel,
-            MessageBoxImage.Warning);
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel);
         if (answer != MessageBoxResult.OK)
         {
             InputBox.Focus();
@@ -470,7 +480,7 @@ public partial class MainWindow : Window
 
         try
         {
-            _store.DeleteAll();
+            _store.DeletePending();
             _sync.RequestSync();
             RewriteLiveBin();
 

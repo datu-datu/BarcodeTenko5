@@ -85,7 +85,7 @@
 
                         <Separator Margin="0,10"/>
 
-                        <Button x:Name="DeleteAllButton" Content="全履歴を削除" Click="DeleteAll_Click"
+                        <Button x:Name="DeleteAllButton" Content="現在の履歴を削除" Click="DeleteAll_Click"
                                 Style="{StaticResource ModernButton}" Height="26" FontSize="11"
                                 Foreground="{StaticResource DangerBrush}"/>
                     </StackPanel>

@@ -303,36 +303,40 @@ CREATE TABLE IF NOT EXISTS app_settings (
     }
 
     /// <summary>
-    /// 全履歴を物理削除する。
-    /// 送信の有無に関わらず全ての client_scan_id を pending_cancels にキューイングして
-    /// サーバ側にも取消を伝播する（サーバに無い場合は not_found となるだけで無害）。
+    /// 未確定（未完了）の点呼履歴のみを物理削除する。
+    /// 過去に「点呼完了」して確定・出力済みのデータは保護され、削除されません。
+    /// 未確定分の client_scan_id を pending_cancels にキューイングして
+    /// サーバ側にも取消を伝播します。
     /// </summary>
-    public void DeleteAll()
+    public void DeletePending()
     {
         using var conn = Open();
         using var tx = conn.BeginTransaction();
 
-        // 1. 全 client_scan_id を pending_cancels に追加
+        // 1. 未確定(completed = 0)の client_scan_id を pending_cancels に追加
         using (var cmd = conn.CreateCommand())
         {
             cmd.Transaction = tx;
             cmd.CommandText = @"
                 INSERT OR IGNORE INTO pending_cancels (client_scan_id, created_at)
-                SELECT client_scan_id, $now FROM scans";
+                SELECT client_scan_id, $now FROM scans WHERE completed = 0";
             cmd.Parameters.AddWithValue("$now", DateTimeOffset.Now.ToString("o"));
             cmd.ExecuteNonQuery();
         }
 
-        // 2. scans テーブルを全削除
+        // 2. 未確定(completed = 0)のレコードのみを削除
         using (var cmd = conn.CreateCommand())
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "DELETE FROM scans";
+            cmd.CommandText = "DELETE FROM scans WHERE completed = 0";
             cmd.ExecuteNonQuery();
         }
 
         tx.Commit();
     }
+
+    /// <summary>後方互換用。未確定の点呼履歴のみを削除します。</summary>
+    public void DeleteAll() => DeletePending();
 
     private static List<ScanRecord> ReadScans(SqliteCommand cmd)
     {
