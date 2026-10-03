@@ -88,10 +88,16 @@ public partial class MainWindow : Window
         if (_sync.LastSyncFailed)
         {
             SyncText.Text = unsent == 0 ? "同期済み" : $"未送信 ({unsent}件)";
+            // 受付はローカルに記録済みのため、復帰後に自動送信されることを併記する
+            OfflineWarningText.Text = unsent > 0
+                ? $"ネットがつながっていません\n未送信 {unsent}件・復帰後に自動送信されます"
+                : "ネットがつながっていません\n復帰後に自動送信されます";
+            OfflineWarningText.Visibility = Visibility.Visible;
         }
         else
         {
             SyncText.Text = unsent == 0 ? "同期済み" : $"同期待ち ({unsent}件)";
+            OfflineWarningText.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -467,7 +473,7 @@ public partial class MainWindow : Window
         }
 
         var answer = MessageBox.Show(
-            $"現在表示中の未完了点呼データ（{pendingCount}件）をすべて削除しますか？\n\n※ 過去に「点呼完了」したデータは削除されません。\n※ この操作は元に戻せません。",
+            $"現在表示中の未完了点呼データ（{pendingCount}件）をすべて削除しますか？\n\n※ この操作は元に戻せません。",
             "点呼データの削除",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning,

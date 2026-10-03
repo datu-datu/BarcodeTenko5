@@ -66,6 +66,13 @@
                                        FontFamily="Consolas" VerticalAlignment="Center" Margin="6,0,0,0"
                                        Foreground="{StaticResource TextPrimaryBrush}"/>
                         </StackPanel>
+
+                        <!-- 接続断の警告（送信失敗時のみ表示） -->
+                        <TextBlock x:Name="OfflineWarningText" FontSize="11" FontWeight="Bold"
+                                   Foreground="{StaticResource DangerBrush}"
+                                   TextWrapping="Wrap" TextAlignment="Center"
+                                   Margin="0,4,0,0"
+                                   Visibility="Collapsed"/>
                     </StackPanel>
 
                     <!-- Row 1: Spacer -->
