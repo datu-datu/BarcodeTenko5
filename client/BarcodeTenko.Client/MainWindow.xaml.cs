@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     private readonly ApiClient _api;
     private readonly SyncService _sync;
     private readonly IReadOnlyList<Location> _locations;
-    private Location _location;
+    private Location? _location;
     private readonly ObservableCollection<ScanRow> _rows = new();
     private int _lastStudentNumber = -1;
 
@@ -119,6 +119,15 @@ public partial class MainWindow : Window
 
     private void ProcessInput(string raw)
     {
+        if (_location is null)
+        {
+            SetLastScan("場所未選択", ErrorBrush);
+            PlaySound(System.Media.SystemSounds.Exclamation);
+            InputBox.Clear();
+            InputBox.Focus();
+            return;
+        }
+
         var studentNumber = CodeNormalizer.Normalize(raw);
         if (studentNumber is null)
         {
@@ -403,7 +412,7 @@ public partial class MainWindow : Window
         {
             // 念のため作業中 bin を最新化してからリネームする
             RewriteLiveBin();
-            var path = BinWriter.FinalizeLive(_config.OutputDirectory, _location.Name);
+            var path = BinWriter.FinalizeLive(_config.OutputDirectory, _location?.Name ?? "不明");
             _store.MarkCompleted(pending.Select(r => r.Id), path);
 
             // 点呼完了報告を最善努力で送信。オフライン時はあきらめる (再送しない)。
@@ -441,16 +450,16 @@ public partial class MainWindow : Window
                 _location = selectWindow.SelectedLocation;
                 _store.SaveLocation(_location);
                 LocationText.Text = _location.Name;
-                _lastStudentNumber = -1;
-                SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
-                RefreshRecent();
-                UpdateSyncText();
             }
             else
             {
-                // キャンセルされた場合：今回の業務完了としてアプリを正常終了
-                Application.Current.Shutdown();
+                _location = null;
+                LocationText.Text = "点呼場所を選択してください";
             }
+            _lastStudentNumber = -1;
+            SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
+            RefreshRecent();
+            UpdateSyncText();
         }
         catch (Exception ex)
         {
