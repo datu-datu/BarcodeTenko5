@@ -40,15 +40,41 @@ public partial class App : Application
         var api = new ApiClient(config);
 
         // 点呼場所はサーバを正とする。取得できなければ設定ファイルの内容にフォールバック。
-        List<Location> locations;
-        try
+        // オフライン時は無言でフォールバックせず、再取得の機会を与える。
+        List<Location> locations = new();
+        while (true)
         {
-            locations = Task.Run(() => api.GetLocationsAsync()).GetAwaiter().GetResult();
+            try
+            {
+                locations = Task.Run(() => api.GetLocationsAsync()).GetAwaiter().GetResult();
+                break;
+            }
+            catch
+            {
+                var choice = MessageBox.Show(
+                    "サーバから点呼場所を取得できませんでした。再試行しますか？\n\n" +
+                    "・「はい」: 再試行\n" +
+                    "・「いいえ」: オフラインで続行\n",
+                    "サーバに接続できません",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.Yes);
+
+                if (choice == MessageBoxResult.Yes)
+                {
+                    continue;
+                }
+                if (choice == MessageBoxResult.Cancel)
+                {
+                    Shutdown();
+                    return;
+                }
+
+                // 「いいえ」: オフラインで続行し、設定ファイルの内容にフォールバックする
+                break;
+            }
         }
-        catch
-        {
-            locations = new List<Location>();
-        }
+
         if (locations.Count == 0)
         {
             locations = config.Locations;
