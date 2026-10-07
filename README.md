@@ -35,7 +35,11 @@ BarcodeTenko5/
 │  ├─ public/                  ダッシュボード / 管理画面 (HTML+JS)
 │  └─ .env.example
 └─ client/
-   └─ BarcodeTenko.Client/     C# WPF クライアント
+   ├─ BarcodeTenko.Client/     C# WPF クライアント (サーバ同期あり)
+   │  ├─ Models/ Services/ ViewModels/
+   │  ├─ App.xaml (cs) / LocationSelectWindow / MainWindow
+   │  └─ appsettings.json
+   └─ BarcodeTenko.Offline/    C# WPF クライアント (オフライン専用・サーバ通信なし)
       ├─ Models/ Services/ ViewModels/
       ├─ App.xaml (cs) / LocationSelectWindow / MainWindow
       └─ appsettings.json
@@ -171,6 +175,23 @@ dotnet publish client/BarcodeTenko.Client/BarcodeTenko.Client.csproj \
 - 中身: 学籍番号(5桁)を **UInt16・リトルエンディアン**で並べただけ。ヘッダや件数はなし
 - 出力対象はそのセッション中に受付した（取消していない）学籍番号
 - 受付中は作業中ファイル `tenko_live.bin` が同じ `bin/` に生成・更新され、「点呼完了」で上記ファイル名にリネームされます（未確定が 0 件になると削除されます）
+
+### オフライン版 (BarcodeTenko.Offline)
+
+サーバ同期（`/api/*` への送信・再送・点呼場所の取得・完了報告）をすべて取り除いた、
+**ネットワークに一切接続しない**クライアントです。サーバやネットワークが使えない会場でも、
+受付・取消・提出用 bin の出力が単体で完結します。
+
+```bash
+cd client
+dotnet build BarcodeTenko.Offline.slnx -c Release
+```
+
+- 点呼場所は `appsettings.json` の `Locations` を正とします（サーバからの取得は行いません）
+- `ServerUrl` / `ClientToken` / `ClientId` は不要です（`appsettings.json` から削除済み）
+- 受付はローカル SQLite と `tenko_live.bin` にのみ記録され、送信・再送は行いません
+- 取消はローカルから物理削除し、bin を書き直します（サーバ側への取消伝播はありません）
+- 起動時に SQLite の未確定データから `tenko_live.bin` を再構成するため、強制終了しても復旧します
 
 ---
 
