@@ -265,7 +265,14 @@ public partial class MainWindow : Window
     {
         try
         {
-            BinWriter.AppendLive(studentNumber, _config.OutputDirectory);
+            var expectedCount = _store.CountPending();
+            if (!BinWriter.TryAppendLive(studentNumber, expectedCount, _config.OutputDirectory))
+            {
+                // ファイルサイズ不整合または初回欠損時は全件書き直しで自動修復する
+                var numbers = _store.GetPendingStudentNumbers();
+                BinWriter.WriteLive(numbers, _config.OutputDirectory);
+            }
+            StatusText.Text = "";
         }
         catch (Exception ex)
         {
@@ -353,15 +360,15 @@ public partial class MainWindow : Window
 
         try
         {
-            // 念のため作業中 bin を最新化してからリネームする
-            RewriteLiveBin();
-            var path = BinWriter.FinalizeLive(_config.OutputDirectory, _location?.Name ?? "不明");
+            var studentNumbers = pending.Select(r => r.StudentNumber).ToList();
+            var path = BinWriter.FinalizeLive(studentNumbers, _config.OutputDirectory, _location?.Name ?? "不明");
+            StatusText.Text = "";
             _store.MarkCompleted(pending.Select(r => r.Id), path);
 
             SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();
             BinWriter.RevealInExplorer(path);
-            MessageBox.Show($"ありがとうございます。このファイルを提出してください。 \n{path}\n", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"ありがとうございます。このファイルを提出してください。\n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
 
             // 1. client.db 上の点呼場所をクリア (次回起動時にも選択画面が出るようにする)
             _store.ClearLocation();

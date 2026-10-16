@@ -11,6 +11,7 @@ public sealed class SyncService
     private readonly LocalStore _store;
     private readonly ApiClient _api;
     private readonly SemaphoreSlim _signal = new(0, 1);
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
@@ -55,6 +56,12 @@ public sealed class SyncService
         }
     }
 
+    public void ClearLastSession()
+    {
+        LastSessionId = null;
+        _store.DeleteValue(LastSessionIdKey);
+    }
+
     private async Task LoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -62,8 +69,6 @@ public sealed class SyncService
             try
             {
                 await SyncOnceAsync(ct).ConfigureAwait(false);
-                LastSyncFailed = false;
-                LastSyncAt = DateTimeOffset.Now;
             }
             catch (OperationCanceledException)
             {
@@ -71,10 +76,8 @@ public sealed class SyncService
             }
             catch
             {
-                LastSyncFailed = true;
+                // SyncOnceAsync 内で LastSyncFailed 更新・StateChanged 発火済み
             }
-
-            StateChanged?.Invoke();
 
             var delay = LastSyncFailed ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(3);
             try
@@ -101,46 +104,90 @@ public sealed class SyncService
 
     public async Task SyncOnceAsync(CancellationToken ct = default)
     {
-        foreach (var record in _store.GetUnsent(100))
+        await _syncLock.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            var response = await _api.SendScanAsync(record, ct).ConfigureAwait(false);
-            RecordSession(response);
-            _store.MarkSent(record.Id);
+            await SendBatchCoreAsync(ct).ConfigureAwait(false);
+            LastSyncFailed = false;
+            LastSyncAt = DateTimeOffset.Now;
         }
-
-        foreach (var clientScanId in _store.GetPendingCancels())
+        catch (OperationCanceledException)
         {
-            await _api.CancelAsync(clientScanId, ct).ConfigureAwait(false);
-            _store.RemovePendingCancel(clientScanId);
+            throw;
+        }
+        catch
+        {
+            LastSyncFailed = true;
+            throw;
+        }
+        finally
+        {
+            _syncLock.Release();
+            StateChanged?.Invoke();
         }
     }
 
     /// <summary>
-    /// 未送信スキャンおよび取消要求が空になるまで、すべて即座に送信し切る。
+    /// 未送信スキャンおよび取消要求が両方とも空になるまで、排他ロック下で全て即座に送信し切る。
     /// 点呼完了時の一括同期に使用する。
     /// </summary>
     public async Task FlushAsync(CancellationToken ct = default)
     {
-        while (true)
+        await _syncLock.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            var unsent = _store.GetUnsent(100);
-            if (unsent.Count == 0)
+            while (true)
             {
-                break;
+                var sentAny = await SendBatchCoreAsync(ct).ConfigureAwait(false);
+                if (!sentAny)
+                {
+                    break;
+                }
             }
+            LastSyncFailed = false;
+            LastSyncAt = DateTimeOffset.Now;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            LastSyncFailed = true;
+            throw;
+        }
+        finally
+        {
+            _syncLock.Release();
+            StateChanged?.Invoke();
+        }
+    }
 
-            foreach (var record in unsent)
+    private async Task<bool> SendBatchCoreAsync(CancellationToken ct)
+    {
+        var progressed = false;
+
+        var unsent = _store.GetUnsent(100);
+        foreach (var record in unsent)
+        {
+            var response = await _api.SendScanAsync(record, ct).ConfigureAwait(false);
+            RecordSession(response);
+            if (!_store.MarkSent(record.Id))
             {
-                var response = await _api.SendScanAsync(record, ct).ConfigureAwait(false);
-                RecordSession(response);
-                _store.MarkSent(record.Id);
+                // 送信中にUI側で取消・削除された場合はサーバ側も取り消すためキューへ積む
+                _store.EnqueueCancel(record.ClientScanId);
             }
+            progressed = true;
         }
 
-        foreach (var clientScanId in _store.GetPendingCancels())
+        var cancels = _store.GetPendingCancels();
+        foreach (var clientScanId in cancels)
         {
             await _api.CancelAsync(clientScanId, ct).ConfigureAwait(false);
             _store.RemovePendingCancel(clientScanId);
+            progressed = true;
         }
+
+        return progressed;
     }
 }

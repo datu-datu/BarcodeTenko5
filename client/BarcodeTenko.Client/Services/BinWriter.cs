@@ -7,13 +7,14 @@ namespace BarcodeTenko.Client.Services;
 public static class BinWriter
 {
     private const string LiveFileName = "tenko_live.bin";
+    private const string TempFileName = "tenko_live.bin.tmp";
 
     /// <summary>作業中 bin ファイルのパス (bin/ ディレクトリ内)</summary>
     public static string LiveFilePath(string outputDirectory)
         => Path.Combine(outputDirectory, LiveFileName);
 
     /// <summary>
-    /// 未確定の点呼データを作業中 bin (bin/tenko_live.bin) に全件書き直す。
+    /// 未確定の点呼データを作業中 bin (bin/tenko_live.bin) にアトミックに全件書き直す。
     /// 取消・全削除・起動時・点呼完了の直前に使う。
     /// </summary>
     public static void WriteLive(IReadOnlyList<int> studentNumbers, string outputDirectory)
@@ -29,47 +30,83 @@ public static class BinWriter
         }
 
         Directory.CreateDirectory(outputDirectory);
-        WriteNumbers(studentNumbers, path);
+        var tempPath = Path.Combine(outputDirectory, TempFileName);
+
+        using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        using (var writer = new BinaryWriter(stream))
+        {
+            foreach (var number in studentNumbers)
+            {
+                writer.Write(checked((ushort)number));
+            }
+            writer.Flush();
+            stream.Flush(flushToDisk: true);
+        }
+
+        // 一時ファイルから本番ファイルへアトミックに置換する
+        File.Move(tempPath, path, overwrite: true);
     }
 
     /// <summary>
     /// スキャン1件を作業中 bin の末尾に追記する (全件書き直しを避ける高速パス)。
-    /// 新規スキャンは未確定(completed = 0)の中で常に最大 id のため、末尾追記で id 順が保たれる。
+    /// 追記前のファイルサイズが期待件数 ((expectedTotalCount - 1) * 2) と異なる場合は false を返し、
+    /// 呼び出し側で WriteLive による全件再構築へフォールバックさせる。
     /// </summary>
-    public static void AppendLive(int studentNumber, string outputDirectory)
+    public static bool TryAppendLive(int studentNumber, int expectedTotalCount, string outputDirectory)
     {
+        if (expectedTotalCount <= 0)
+        {
+            return false;
+        }
+
         Directory.CreateDirectory(outputDirectory);
         var path = LiveFilePath(outputDirectory);
-        using var stream = new FileStream(path, FileMode.Append, FileAccess.Write);
+        var expectedPrevBytes = (long)(expectedTotalCount - 1) * sizeof(ushort);
+
+        if (expectedPrevBytes == 0)
+        {
+            if (File.Exists(path) && new FileInfo(path).Length != 0)
+            {
+                return false;
+            }
+        }
+        else if (!File.Exists(path) || new FileInfo(path).Length != expectedPrevBytes)
+        {
+            return false;
+        }
+
+        using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
         using var writer = new BinaryWriter(stream);
-        writer.Write((ushort)studentNumber);
+        writer.Write(checked((ushort)studentNumber));
+        writer.Flush();
+        stream.Flush(flushToDisk: true);
+        return true;
     }
 
     /// <summary>
-    /// 点呼完了: 作業中 bin (bin/tenko_live.bin) をタイムスタンプ付きの最終ファイル名にリネームする。
+    /// 点呼完了: 最新の学籍番号リストで確実に書き出してからタイムスタンプ付きの最終ファイル名にリネームする。
     /// </summary>
-    public static string FinalizeLive(string outputDirectory, string locationName)
+    public static string FinalizeLive(IReadOnlyList<int> studentNumbers, string outputDirectory, string locationName)
     {
-        var livePath = LiveFilePath(outputDirectory);
-        if (!File.Exists(livePath))
+        if (studentNumbers.Count == 0)
         {
-            throw new FileNotFoundException("出力対象の bin ファイルがありません。");
+            throw new InvalidOperationException("出力対象の点呼データがありません。");
         }
 
-        var fileName = $"tenko_{Sanitize(locationName)}_{DateTime.Now:yyyyMMdd_HHmmss}.bin";
-        var finalPath = Path.Combine(outputDirectory, fileName);
+        // 例外を握りつぶさず、確実に最新データで tenko_live.bin を書き直す
+        WriteLive(studentNumbers, outputDirectory);
+
+        var livePath = LiveFilePath(outputDirectory);
+        var baseName = $"tenko_{Sanitize(locationName)}_{DateTime.Now:yyyyMMdd_HHmmss}";
+        var finalPath = Path.Combine(outputDirectory, $"{baseName}.bin");
+        var suffix = 1;
+        while (File.Exists(finalPath))
+        {
+            finalPath = Path.Combine(outputDirectory, $"{baseName}_{suffix++}.bin");
+        }
+
         File.Move(livePath, finalPath);
         return finalPath;
-    }
-
-    private static void WriteNumbers(IReadOnlyList<int> studentNumbers, string path)
-    {
-        using var stream = File.Create(path);
-        using var writer = new BinaryWriter(stream);
-        foreach (var number in studentNumbers)
-        {
-            writer.Write((ushort)number);
-        }
     }
 
     public static void RevealInExplorer(string path)

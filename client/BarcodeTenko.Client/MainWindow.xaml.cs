@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private Location? _location;
     private readonly ObservableCollection<ScanRow> _rows = new();
     private int _lastStudentNumber = -1;
+    private string? _lastBinError;
 
     public MainWindow(AppConfig config, LocalStore store, ApiClient api, SyncService sync, Location location, IReadOnlyList<Location> locations)
     {
@@ -44,8 +45,8 @@ public partial class MainWindow : Window
         {
             InputBox.Focus();
             RefreshRecent();
-            UpdateSyncText();
             RewriteLiveBin();
+            UpdateSyncText();
 
             ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
             var clockTimer = new System.Windows.Threading.DispatcherTimer
@@ -84,10 +85,10 @@ public partial class MainWindow : Window
 
     private void UpdateSyncText()
     {
-        var unsent = _store.CountUnsent();
+        var unsent = _store.CountPendingSyncOperations();
         if (_sync.LastSyncFailed)
         {
-            SyncText.Text = unsent == 0 ? "同期済み" : $"未送信 ({unsent}件)";
+            SyncText.Text = _lastBinError ?? (unsent == 0 ? "同期済み" : $"未送信 ({unsent}件)");
             // 受付はローカルに記録済みのため、復帰後に自動送信されることを併記する
             OfflineWarningText.Text = unsent > 0
                 ? $"ネットがつながっていません\n未送信 {unsent}件・復帰後に自動送信されます"
@@ -96,7 +97,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            SyncText.Text = unsent == 0 ? "同期済み" : $"同期待ち ({unsent}件)";
+            SyncText.Text = _lastBinError ?? (unsent == 0 ? "同期済み" : $"同期待ち ({unsent}件)");
             OfflineWarningText.Visibility = Visibility.Collapsed;
         }
     }
@@ -258,10 +259,12 @@ public partial class MainWindow : Window
         {
             var numbers = _store.GetPendingStudentNumbers();
             BinWriter.WriteLive(numbers, _config.OutputDirectory);
+            _lastBinError = null;
         }
         catch (Exception ex)
         {
-            SyncText.Text = "bin 書き出し失敗: " + ex.Message;
+            _lastBinError = "bin 書き出し失敗: " + ex.Message;
+            SyncText.Text = _lastBinError;
         }
     }
 
@@ -272,11 +275,19 @@ public partial class MainWindow : Window
     {
         try
         {
-            BinWriter.AppendLive(studentNumber, _config.OutputDirectory);
+            var expectedCount = _store.CountPending();
+            if (!BinWriter.TryAppendLive(studentNumber, expectedCount, _config.OutputDirectory))
+            {
+                // ファイルサイズ不整合または初回欠損時は全件書き直しで自動修復する
+                var numbers = _store.GetPendingStudentNumbers();
+                BinWriter.WriteLive(numbers, _config.OutputDirectory);
+            }
+            _lastBinError = null;
         }
         catch (Exception ex)
         {
-            SyncText.Text = "bin 書き出し失敗: " + ex.Message;
+            _lastBinError = "bin 書き出し失敗: " + ex.Message;
+            SyncText.Text = _lastBinError;
         }
     }
 
@@ -331,8 +342,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        _store.EnqueueCancel(record.ClientScanId);
-        _store.DeleteScan(record.ClientScanId);
+        // 1トランザクションで取消キュー登録(送信済みの場合のみ)と削除を実行
+        _store.CancelScan(record.ClientScanId);
         _sync.RequestSync();
         RewriteLiveBin();
 
@@ -354,8 +365,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 未送信データがある場合、まず即時送信（フラッシュ）を試みる
-        while (_store.CountUnsent() > 0)
+        // 未送信スキャンおよび未送信キャンセルがある場合、まず即時送信（フラッシュ）を試みる
+        while (_store.CountPendingSyncOperations() > 0)
         {
             CompleteButton.IsEnabled = false;
             try
@@ -372,11 +383,11 @@ public partial class MainWindow : Window
                 UpdateSyncText();
             }
 
-            var unsent = _store.CountUnsent();
-            if (unsent > 0)
+            var remaining = _store.CountPendingSyncOperations();
+            if (remaining > 0)
             {
                 var res = MessageBox.Show(
-                    $"サーバーへ未送信のデータが {unsent} 件あります。再試行しますか？\n\n" +
+                    $"サーバーへ未送信のデータ・取消要求が {remaining} 件あります。再試行しますか？\n\n" +
                     "「はい」: 再試行（Wi-Fi接続を確認した後に押してください）\n" +
                     "「いいえ」: もし「はい」を押してもこの画面が繰り返されたなら「いいえ」でも大丈夫です。\n" +
                     "「キャンセル」: 完了処理を中断",
@@ -410,30 +421,29 @@ public partial class MainWindow : Window
 
         try
         {
-            // 念のため作業中 bin を最新化してからリネームする
-            RewriteLiveBin();
-            var path = BinWriter.FinalizeLive(_config.OutputDirectory, _location?.Name ?? "不明");
+            var studentNumbers = pending.Select(r => r.StudentNumber).ToList();
+            var path = BinWriter.FinalizeLive(studentNumbers, _config.OutputDirectory, _location?.Name ?? "不明");
+            _lastBinError = null;
             _store.MarkCompleted(pending.Select(r => r.Id), path);
 
             // 点呼完了報告を最善努力で送信。オフライン時はあきらめる (再送しない)。
-            var reported = true;
             try
             {
                 await _api.CompleteSessionAsync(_sync.LastSessionId, pending.Count, System.IO.Path.GetFileName(path));
             }
             catch
             {
-                reported = false;
+                // 完了報告失敗時は再送しない
             }
+
+            // 次回セッションへ古い SessionId を持ち越さないようクリア
+            _sync.ClearLastSession();
 
             SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
             RefreshRecent();
             UpdateSyncText();
             BinWriter.RevealInExplorer(path);
-            var reportText = reported
-                ? ""
-                : "";
-            MessageBox.Show($"ありがとうございます。このファイルを提出してください。 \n{path}\n\n{reportText}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"ありがとうございます。このファイルを提出してください。\n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
 
             // 1. client.db 上の点呼場所をクリア (次回起動時にも選択画面が出るようにする)
             _store.ClearLocation();

@@ -17,7 +17,13 @@ public sealed class LocalStore
     {
         Directory.CreateDirectory(config.DataDirectory);
         var dbPath = Path.Combine(config.DataDirectory, "client.db");
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = dbPath }.ToString();
+        _connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            DefaultTimeout = 5,
+            Pooling = true
+        }.ToString();
         Initialize();
     }
 
@@ -25,6 +31,9 @@ public sealed class LocalStore
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;";
+        cmd.ExecuteNonQuery();
         return connection;
     }
 
@@ -33,6 +42,8 @@ public sealed class LocalStore
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
+PRAGMA journal_mode=WAL;
+
 CREATE TABLE IF NOT EXISTS scans (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   student_number INTEGER NOT NULL,
@@ -43,6 +54,7 @@ CREATE TABLE IF NOT EXISTS scans (
   completed_at   TEXT,
   bin_file       TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_scans_completed ON scans(completed, id);
 CREATE TABLE IF NOT EXISTS app_settings (
   key   TEXT PRIMARY KEY,
   value TEXT
@@ -165,14 +177,16 @@ CREATE TABLE IF NOT EXISTS app_settings (
     {
         using var conn = Open();
         using var tx = conn.BeginTransaction();
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "UPDATE scans SET completed = 1, completed_at = $at, bin_file = $file WHERE id = $id";
+        cmd.Parameters.AddWithValue("$at", DateTimeOffset.Now.ToString("o"));
+        cmd.Parameters.AddWithValue("$file", binFile);
+        var idParam = cmd.Parameters.Add("$id", SqliteType.Integer);
+
         foreach (var id in ids)
         {
-            using var cmd = conn.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = "UPDATE scans SET completed = 1, completed_at = $at, bin_file = $file WHERE id = $id";
-            cmd.Parameters.AddWithValue("$at", DateTimeOffset.Now.ToString("o"));
-            cmd.Parameters.AddWithValue("$file", binFile);
-            cmd.Parameters.AddWithValue("$id", id);
+            idParam.Value = id;
             cmd.ExecuteNonQuery();
         }
         tx.Commit();
@@ -187,11 +201,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
         return ReadScans(cmd);
     }
 
+    /// <summary>5桁ゼロ埋め表記（例: 00123）でも部分一致検索できるようにする</summary>
     public List<ScanRecord> SearchScans(string query)
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 AND student_number LIKE $q ORDER BY id DESC";
+        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 AND printf('%05d', student_number) LIKE $q ORDER BY id DESC";
         cmd.Parameters.AddWithValue("$q", $"%{query}%");
         return ReadScans(cmd);
     }

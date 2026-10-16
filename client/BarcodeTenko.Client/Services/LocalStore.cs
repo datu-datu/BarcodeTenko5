@@ -16,7 +16,13 @@ public sealed class LocalStore
     {
         Directory.CreateDirectory(config.DataDirectory);
         var dbPath = Path.Combine(config.DataDirectory, "client.db");
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = dbPath }.ToString();
+        _connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            DefaultTimeout = 5,
+            Pooling = true
+        }.ToString();
         Initialize();
     }
 
@@ -24,6 +30,9 @@ public sealed class LocalStore
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;";
+        cmd.ExecuteNonQuery();
         return connection;
     }
 
@@ -32,6 +41,8 @@ public sealed class LocalStore
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
+PRAGMA journal_mode=WAL;
+
 CREATE TABLE IF NOT EXISTS scans (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   client_scan_id TEXT    NOT NULL UNIQUE,
@@ -45,6 +56,8 @@ CREATE TABLE IF NOT EXISTS scans (
   completed_at   TEXT,
   bin_file       TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_scans_unsent ON scans(sent, id);
+CREATE INDEX IF NOT EXISTS idx_scans_completed ON scans(completed, id);
 CREATE TABLE IF NOT EXISTS pending_cancels (
   client_scan_id TEXT PRIMARY KEY,
   created_at     TEXT NOT NULL
@@ -156,23 +169,27 @@ CREATE TABLE IF NOT EXISTS app_settings (
         cmd.ExecuteNonQuery();
     }
 
+    // 完了(completed = 1)になった後でも、未送信(sent = 0)のものはネット復帰後に送信できるよう completed = 0 条件を外す
     public List<ScanRecord> GetUnsent(int limit)
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM scans WHERE sent = 0 AND completed = 0 ORDER BY id LIMIT $limit";
+        cmd.CommandText = "SELECT * FROM scans WHERE sent = 0 ORDER BY id LIMIT $limit";
         cmd.Parameters.AddWithValue("$limit", limit);
         return ReadScans(cmd);
     }
 
-    public void MarkSent(long id)
+    /// <summary>
+    /// 送信済みに更新する。送信中にUI側で取消削除されていた場合は false を返す。
+    /// </summary>
+    public bool MarkSent(long id)
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE scans SET sent = 1, sent_at = $at WHERE id = $id";
         cmd.Parameters.AddWithValue("$at", DateTimeOffset.Now.ToString("o"));
         cmd.Parameters.AddWithValue("$id", id);
-        cmd.ExecuteNonQuery();
+        return cmd.ExecuteNonQuery() > 0;
     }
 
     public void DeleteScan(string clientScanId)
@@ -192,6 +209,38 @@ CREATE TABLE IF NOT EXISTS app_settings (
         cmd.Parameters.AddWithValue("$cid", clientScanId);
         cmd.Parameters.AddWithValue("$at", DateTimeOffset.Now.ToString("o"));
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// 1件の取り消しを1トランザクションで原子的に実行する。
+    /// すでにサーバーへ送信済み (sent = 1) の場合のみ pending_cancels に登録する。
+    /// </summary>
+    public void CancelScan(string clientScanId)
+    {
+        using var conn = Open();
+        using var tx = conn.BeginTransaction();
+
+        using (var enqueueCmd = conn.CreateCommand())
+        {
+            enqueueCmd.Transaction = tx;
+            enqueueCmd.CommandText = @"
+                INSERT OR IGNORE INTO pending_cancels (client_scan_id, created_at)
+                SELECT client_scan_id, $now FROM scans
+                WHERE client_scan_id = $cid AND sent = 1";
+            enqueueCmd.Parameters.AddWithValue("$cid", clientScanId);
+            enqueueCmd.Parameters.AddWithValue("$now", DateTimeOffset.Now.ToString("o"));
+            enqueueCmd.ExecuteNonQuery();
+        }
+
+        using (var delCmd = conn.CreateCommand())
+        {
+            delCmd.Transaction = tx;
+            delCmd.CommandText = "DELETE FROM scans WHERE client_scan_id = $cid AND completed = 0";
+            delCmd.Parameters.AddWithValue("$cid", clientScanId);
+            delCmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
     }
 
     public List<string> GetPendingCancels()
@@ -244,14 +293,16 @@ CREATE TABLE IF NOT EXISTS app_settings (
     {
         using var conn = Open();
         using var tx = conn.BeginTransaction();
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "UPDATE scans SET completed = 1, completed_at = $at, bin_file = $file WHERE id = $id";
+        cmd.Parameters.AddWithValue("$at", DateTimeOffset.Now.ToString("o"));
+        cmd.Parameters.AddWithValue("$file", binFile);
+        var idParam = cmd.Parameters.Add("$id", SqliteType.Integer);
+
         foreach (var id in ids)
         {
-            using var cmd = conn.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = "UPDATE scans SET completed = 1, completed_at = $at, bin_file = $file WHERE id = $id";
-            cmd.Parameters.AddWithValue("$at", DateTimeOffset.Now.ToString("o"));
-            cmd.Parameters.AddWithValue("$file", binFile);
-            cmd.Parameters.AddWithValue("$id", id);
+            idParam.Value = id;
             cmd.ExecuteNonQuery();
         }
         tx.Commit();
@@ -266,11 +317,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
         return ReadScans(cmd);
     }
 
+    /// <summary>5桁ゼロ埋め表記（例: 00123）でも部分一致検索できるようにする</summary>
     public List<ScanRecord> SearchScans(string query, int limit = 100)
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 AND student_number LIKE $q ORDER BY id DESC LIMIT $limit";
+        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 AND printf('%05d', student_number) LIKE $q ORDER BY id DESC LIMIT $limit";
         cmd.Parameters.AddWithValue("$q", $"%{query}%");
         cmd.Parameters.AddWithValue("$limit", limit);
         return ReadScans(cmd);
@@ -280,7 +332,18 @@ CREATE TABLE IF NOT EXISTS app_settings (
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM scans WHERE sent = 0 AND completed = 0";
+        cmd.CommandText = "SELECT COUNT(*) FROM scans WHERE sent = 0";
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    /// <summary>未送信スキャン件数と未送信キャンセル件数の合計を返す（点呼完了時のフラッシュ・同期状態表示用）</summary>
+    public int CountPendingSyncOperations()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT (SELECT COUNT(*) FROM scans WHERE sent = 0)
+                 + (SELECT COUNT(*) FROM pending_cancels)";
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
@@ -305,7 +368,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     /// <summary>
     /// 未確定（未完了）の点呼履歴のみを物理削除する。
     /// 過去に「点呼完了」して確定・出力済みのデータは保護され、削除されません。
-    /// 未確定分の client_scan_id を pending_cancels にキューイングして
+    /// 未確定分のうち送信済み(sent = 1)の client_scan_id を pending_cancels にキューイングして
     /// サーバ側にも取消を伝播します。
     /// </summary>
     public void DeletePending()
@@ -313,13 +376,13 @@ CREATE TABLE IF NOT EXISTS app_settings (
         using var conn = Open();
         using var tx = conn.BeginTransaction();
 
-        // 1. 未確定(completed = 0)の client_scan_id を pending_cancels に追加
+        // 1. 未確定(completed = 0)かつ送信済み(sent = 1)の client_scan_id を pending_cancels に追加
         using (var cmd = conn.CreateCommand())
         {
             cmd.Transaction = tx;
             cmd.CommandText = @"
                 INSERT OR IGNORE INTO pending_cancels (client_scan_id, created_at)
-                SELECT client_scan_id, $now FROM scans WHERE completed = 0";
+                SELECT client_scan_id, $now FROM scans WHERE completed = 0 AND sent = 1";
             cmd.Parameters.AddWithValue("$now", DateTimeOffset.Now.ToString("o"));
             cmd.ExecuteNonQuery();
         }
