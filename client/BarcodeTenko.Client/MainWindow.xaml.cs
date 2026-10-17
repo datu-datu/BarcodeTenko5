@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ScanRow> _rows = new();
     private int _lastStudentNumber = -1;
     private string? _lastBinError;
+    private bool _completing;
 
     public MainWindow(AppConfig config, LocalStore store, ApiClient api, SyncService sync, Location location, IReadOnlyList<Location> locations)
     {
@@ -120,6 +121,15 @@ public partial class MainWindow : Window
 
     private void ProcessInput(string raw)
     {
+        // 点呼完了〜次回点呼開始の間は新規受付を締め切る (押下後のスキャンは今回の対象に含めない)
+        if (_completing)
+        {
+            SetLastScan("点呼完了処理中", CancelBrush);
+            InputBox.Clear();
+            InputBox.Focus();
+            return;
+        }
+
         if (_location is null)
         {
             SetLastScan("場所未選択", ErrorBrush);
@@ -365,118 +375,122 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 未送信スキャンおよび未送信キャンセルがある場合、まず即時送信（フラッシュ）を試みる
-        while (_store.CountPendingSyncOperations() > 0)
+        // 点呼完了〜次回点呼開始まで新規受付を締め切る (途中で受付が混ざらないため pending は不変)
+        _completing = true;
+        try
         {
-            CompleteButton.IsEnabled = false;
+            // 未送信スキャンおよび未送信キャンセルがある場合、まず即時送信（フラッシュ）を試みる
+            while (_store.CountPendingSyncOperations() > 0)
+            {
+                CompleteButton.IsEnabled = false;
+                try
+                {
+                    await _sync.FlushAsync();
+                }
+                catch
+                {
+                    // 通信エラー等は下の判定でハンドリング
+                }
+                finally
+                {
+                    CompleteButton.IsEnabled = true;
+                    UpdateSyncText();
+                }
+
+                var remaining = _store.CountPendingSyncOperations();
+                if (remaining > 0)
+                {
+                    var res = MessageBox.Show(
+                        $"サーバーへ未送信のデータ・取消要求が {remaining} 件あります。再試行しますか？\n\n" +
+                        "「はい」: 再試行（Wi-Fi接続を確認した後に押してください）\n" +
+                        "「いいえ」: もし「はい」を押してもこの画面が繰り返されたなら「いいえ」でも大丈夫です。\n" +
+                        "「キャンセル」: 完了処理を中断",
+                        "未送信データがあります",
+                        MessageBoxButton.YesNoCancel,
+                        MessageBoxImage.Warning,
+                        MessageBoxResult.Cancel);
+
+                    if (res == MessageBoxResult.Yes)
+                    {
+                        continue;
+                    }
+                    else if (res == MessageBoxResult.No)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+            }
+
+            var message = $"{pending.Count} 件の点呼データを確定し、提出用ファイルを出力します。\nよろしいですか？";
+            if (MessageBox.Show(message, "点呼完了", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK)
+            {
+                return;
+            }
+
             try
             {
-                await _sync.FlushAsync();
-            }
-            catch
-            {
-                // 通信エラー等は下の判定でハンドリング
-            }
-            finally
-            {
-                CompleteButton.IsEnabled = true;
-                UpdateSyncText();
-            }
+                var studentNumbers = pending.Select(r => r.StudentNumber).ToList();
+                var path = BinWriter.FinalizeLive(studentNumbers, _config.OutputDirectory, _location?.Name ?? "不明");
+                _lastBinError = null;
+                _store.MarkCompleted(pending.Select(r => r.Id), path);
 
-            var remaining = _store.CountPendingSyncOperations();
-            if (remaining > 0)
-            {
-                var res = MessageBox.Show(
-                    $"サーバーへ未送信のデータ・取消要求が {remaining} 件あります。再試行しますか？\n\n" +
-                    "「はい」: 再試行（Wi-Fi接続を確認した後に押してください）\n" +
-                    "「いいえ」: もし「はい」を押してもこの画面が繰り返されたなら「いいえ」でも大丈夫です。\n" +
-                    "「キャンセル」: 完了処理を中断",
-                    "未送信データがあります",
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.Cancel);
-
-                if (res == MessageBoxResult.Yes)
+                // 点呼完了報告を最善努力で送信。オフライン時はあきらめる (再送しない)。
+                try
                 {
-                    continue;
+                    await _api.CompleteSessionAsync(_sync.LastSessionId, pending.Count, System.IO.Path.GetFileName(path));
                 }
-                else if (res == MessageBoxResult.No)
+                catch
                 {
-                    break;
+                    // 完了報告失敗時は再送しない
+                }
+
+                // 次回セッションへ古い SessionId を持ち越さないようクリア
+                _sync.ClearLastSession();
+
+                SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
+                RefreshRecent();
+                UpdateSyncText();
+                BinWriter.RevealInExplorer(path);
+                MessageBox.Show($"ありがとうございます。このファイルを提出してください。\n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // 1. client.db 上の点呼場所をクリア (次回起動時にも選択画面が出るようにする)
+                _store.ClearLocation();
+
+                // 2. 次の点呼場所を選択する画面を表示
+                var selectWindow = new LocationSelectWindow(_locations)
+                {
+                    Owner = this
+                };
+
+                if (selectWindow.ShowDialog() == true && selectWindow.SelectedLocation is not null)
+                {
+                    // 新しい場所が選択された場合：状態を更新して次の点呼待機
+                    _location = selectWindow.SelectedLocation;
+                    _store.SaveLocation(_location);
+                    LocationText.Text = _location.Name;
                 }
                 else
                 {
-                    InputBox.Focus();
-                    return;
+                    _location = null;
+                    LocationText.Text = "点呼場所を選択してください";
                 }
+                _lastStudentNumber = -1;
+                SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
+                RefreshRecent();
+                UpdateSyncText();
             }
-        }
-
-        var message = $"{pending.Count} 件の点呼データを確定し、提出用ファイルを出力します。\nよろしいですか？";
-        if (MessageBox.Show(message, "点呼完了", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK)
-        {
-            InputBox.Focus();
-            return;
-        }
-
-        try
-        {
-            var studentNumbers = pending.Select(r => r.StudentNumber).ToList();
-            var path = BinWriter.FinalizeLive(studentNumbers, _config.OutputDirectory, _location?.Name ?? "不明");
-            _lastBinError = null;
-            _store.MarkCompleted(pending.Select(r => r.Id), path);
-
-            // 点呼完了報告を最善努力で送信。オフライン時はあきらめる (再送しない)。
-            try
+            catch (Exception ex)
             {
-                await _api.CompleteSessionAsync(_sync.LastSessionId, pending.Count, System.IO.Path.GetFileName(path));
+                MessageBox.Show("確定に失敗しました: " + ex.Message, "点呼完了", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            catch
-            {
-                // 完了報告失敗時は再送しない
-            }
-
-            // 次回セッションへ古い SessionId を持ち越さないようクリア
-            _sync.ClearLastSession();
-
-            SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
-            RefreshRecent();
-            UpdateSyncText();
-            BinWriter.RevealInExplorer(path);
-            MessageBox.Show($"ありがとうございます。このファイルを提出してください。\n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
-
-            // 1. client.db 上の点呼場所をクリア (次回起動時にも選択画面が出るようにする)
-            _store.ClearLocation();
-
-            // 2. 次の点呼場所を選択する画面を表示
-            var selectWindow = new LocationSelectWindow(_locations)
-            {
-                Owner = this
-            };
-
-            if (selectWindow.ShowDialog() == true && selectWindow.SelectedLocation is not null)
-            {
-                // 新しい場所が選択された場合：状態を更新して次の点呼待機
-                _location = selectWindow.SelectedLocation;
-                _store.SaveLocation(_location);
-                LocationText.Text = _location.Name;
-            }
-            else
-            {
-                _location = null;
-                LocationText.Text = "点呼場所を選択してください";
-            }
-            _lastStudentNumber = -1;
-            SetLastScan("", (Brush)FindResource("TextSecondaryBrush"));
-            RefreshRecent();
-            UpdateSyncText();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show("確定に失敗しました: " + ex.Message, "点呼完了", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
+            _completing = false;
             InputBox.Focus();
         }
     }
