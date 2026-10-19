@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private Location? _location;
     private readonly ObservableCollection<ScanRow> _rows = new();
     private int _lastStudentNumber = -1;
+    private int _pendingCount;
     private string? _lastBinError;
     private bool _completing;
 
@@ -77,11 +78,8 @@ public partial class MainWindow : Window
 
     private void OnSyncStateChanged()
     {
-        Dispatcher.Invoke(() =>
-        {
-            RefreshRecent();
-            UpdateSyncText();
-        });
+        // 送信状態の変化は一覧の中身（未確定データ）を変えないため、グリッドは再構築しない
+        Dispatcher.Invoke(UpdateSyncText);
     }
 
     private void UpdateSyncText()
@@ -177,10 +175,10 @@ public partial class MainWindow : Window
         };
 
         _store.AddScan(record);
+        AddRecentRow(record);
         _sync.RequestSync();
-        AppendLiveBin(studentNumber.Value);
+        AppendLiveBin(studentNumber.Value, _pendingCount);
 
-        RefreshRecent(scanId);
         UpdateSyncText();
     }
 
@@ -238,7 +236,7 @@ public partial class MainWindow : Window
     {
         var query = SearchBox.Text.Trim();
         var records = string.IsNullOrEmpty(query)
-            ? _store.GetRecent(200)
+            ? _store.GetPending()
             : _store.SearchScans(query);
 
         _rows.Clear();
@@ -256,7 +254,32 @@ public partial class MainWindow : Window
 
     private void UpdateTotalText()
     {
-        TotalCountText.Text = _store.CountPending().ToString();
+        _pendingCount = _store.CountPending();
+        TotalCountText.Text = _pendingCount.ToString();
+    }
+
+    /// <summary>
+    /// 受付1件を一覧の先頭に差し込む高速パス。
+    /// 一覧は id 降順なので先頭追加で順序が保たれる。全件クエリを避けるため、
+    /// 検索中（絞り込み結果が変わり得る）のときだけ RefreshRecent にまわす。
+    /// </summary>
+    private void AddRecentRow(ScanRecord record)
+    {
+        if (!string.IsNullOrEmpty(SearchBox.Text.Trim()))
+        {
+            RefreshRecent(record.ClientScanId);
+            return;
+        }
+
+        foreach (var row in _rows)
+        {
+            row.IsRecentlyAdded = false;
+        }
+
+        _rows.Insert(0, new ScanRow(record) { IsRecentlyAdded = true });
+
+        _pendingCount++;
+        TotalCountText.Text = _pendingCount.ToString();
     }
 
     /// <summary>
@@ -281,12 +304,11 @@ public partial class MainWindow : Window
     /// <summary>
     /// スキャン1件を作業中 bin の末尾に追記する (全件書き直しを避ける高速パス)。
     /// </summary>
-    private void AppendLiveBin(int studentNumber)
+    private void AppendLiveBin(int studentNumber, int expectedTotalCount)
     {
         try
         {
-            var expectedCount = _store.CountPending();
-            if (!BinWriter.TryAppendLive(studentNumber, expectedCount, _config.OutputDirectory))
+            if (!BinWriter.TryAppendLive(studentNumber, expectedTotalCount, _config.OutputDirectory))
             {
                 // ファイルサイズ不整合または初回欠損時は全件書き直しで自動修復する
                 var numbers = _store.GetPendingStudentNumbers();
@@ -370,7 +392,7 @@ public partial class MainWindow : Window
         var pending = _store.GetPendingExport();
         if (pending.Count == 0)
         {
-            MessageBox.Show("出力する点呼データがありません。", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("出力するデータがありません。", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
             InputBox.Focus();
             return;
         }
@@ -425,7 +447,7 @@ public partial class MainWindow : Window
                 }
             }
 
-            var message = $"{pending.Count} 件の点呼データを確定し、提出用ファイルを出力します。\nよろしいですか？";
+            var message = $"{pending.Count} 件のデータを確定し、提出用ファイルを出力します。\nよろしいですか？";
             if (MessageBox.Show(message, "点呼完了", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK)
             {
                 return;
@@ -455,7 +477,7 @@ public partial class MainWindow : Window
                 RefreshRecent();
                 UpdateSyncText();
                 BinWriter.RevealInExplorer(path);
-                MessageBox.Show($"ありがとうございます。このファイルを提出してください。\n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"ありがとうございました。このファイルを提出してください。\n{path}", "点呼完了", MessageBoxButton.OK, MessageBoxImage.Information);
 
                 // 1. client.db 上の点呼場所をクリア (次回起動時にも選択画面が出るようにする)
                 _store.ClearLocation();
@@ -500,13 +522,13 @@ public partial class MainWindow : Window
         var pendingCount = _store.CountPending();
         if (pendingCount == 0)
         {
-            MessageBox.Show("削除対象の未確定データはありません。", "点呼データの削除", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("削除対象のデータはありません。", "点呼データの削除", MessageBoxButton.OK, MessageBoxImage.Information);
             InputBox.Focus();
             return;
         }
 
         var answer = MessageBox.Show(
-            $"現在表示中の未完了点呼データ（{pendingCount}件）をすべて削除しますか？\n\n※ この操作は元に戻せません。",
+            $"現在表示されているデータ（{pendingCount}件）をすべて削除しますか？\n\n※ この操作は元に戻せません。",
             "点呼データの削除",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning,

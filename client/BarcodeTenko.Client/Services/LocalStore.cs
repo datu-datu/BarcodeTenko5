@@ -308,23 +308,22 @@ CREATE TABLE IF NOT EXISTS app_settings (
         tx.Commit();
     }
 
-    public List<ScanRecord> GetRecent(int limit)
+    /// <summary>未確定（表示対象）の点呼データを id 降順で全件返す。</summary>
+    public List<ScanRecord> GetPending()
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 ORDER BY id DESC LIMIT $limit";
-        cmd.Parameters.AddWithValue("$limit", limit);
+        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 ORDER BY id DESC";
         return ReadScans(cmd);
     }
 
     /// <summary>5桁ゼロ埋め表記（例: 00123）でも部分一致検索できるようにする</summary>
-    public List<ScanRecord> SearchScans(string query, int limit = 100)
+    public List<ScanRecord> SearchScans(string query)
     {
         using var conn = Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 AND printf('%05d', student_number) LIKE $q ORDER BY id DESC LIMIT $limit";
+        cmd.CommandText = "SELECT * FROM scans WHERE completed = 0 AND printf('%05d', student_number) LIKE $q ORDER BY id DESC";
         cmd.Parameters.AddWithValue("$q", $"%{query}%");
-        cmd.Parameters.AddWithValue("$limit", limit);
         return ReadScans(cmd);
     }
 

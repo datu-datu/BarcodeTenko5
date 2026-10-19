@@ -1,9 +1,12 @@
+using System.ComponentModel;
 using BarcodeTenko.Client.Models;
 
 namespace BarcodeTenko.Client.ViewModels;
 
-public sealed class ScanRow
+public sealed class ScanRow : INotifyPropertyChanged
 {
+    private bool _isRecentlyAdded;
+
     public ScanRow(ScanRecord record)
     {
         Record = record;
@@ -19,5 +22,20 @@ public sealed class ScanRow
 
     public string TimeText => Record.CreatedAt.LocalDateTime.ToString("HH:mm:ss");
 
-    public bool IsRecentlyAdded { get; set; }
+    public bool IsRecentlyAdded
+    {
+        get => _isRecentlyAdded;
+        set
+        {
+            if (_isRecentlyAdded == value)
+            {
+                return;
+            }
+
+            _isRecentlyAdded = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsRecentlyAdded)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
