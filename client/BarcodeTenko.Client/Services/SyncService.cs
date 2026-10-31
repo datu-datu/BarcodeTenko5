@@ -70,13 +70,15 @@ public sealed class SyncService
             {
                 await SyncOnceAsync(ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break;
             }
             catch
             {
-                // SyncOnceAsync 内で LastSyncFailed 更新・StateChanged 発火済み
+                // HttpClient のタイムアウトも OperationCanceledException になるため、
+                // 終了要求以外は通常の同期失敗としてループを継続する
+                // (SyncOnceAsync 内で LastSyncFailed 更新・StateChanged 発火済み)
             }
 
             var delay = LastSyncFailed ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(3);
@@ -111,7 +113,7 @@ public sealed class SyncService
             LastSyncFailed = false;
             LastSyncAt = DateTimeOffset.Now;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
         }
@@ -147,7 +149,7 @@ public sealed class SyncService
             LastSyncFailed = false;
             LastSyncAt = DateTimeOffset.Now;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
         }
