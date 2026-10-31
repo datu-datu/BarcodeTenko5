@@ -3,15 +3,18 @@
 const config = require('./config');
 const { db, nowIso, getOpenSession } = require('./db');
 
-// 受付したスキャンを Webhook (Power Automate の Teams Webhook) へ転送する。
-// 負荷軽減のため、BATCH_SIZE 件たまるか、最後の受付から IDLE_MS 経過したら 1 つの Webhook にまとめて送る。
+// 受付したスキャンを Webhook (Power Automate) へ転送する。
+// INTERVAL_MS ごとに、未送信の受付を 1 つの Webhook にまとめて送る。
 // ペイロードは { records: [{ student_number, location, scan_time }] } の最小 JSON。
-// Power Automate 側で Apply to each でループし、チャット等へ個別に投稿する想定。
+// Power Automate 側でメール本文を組み立て、BCC で一括送信する想定。
 // 自動送信は管理画面から停止でき、その場合も未送信分は保持され、手動送信で送れる。
 
 const lastResult = { lastSentAt: null, lastError: null };
 let sending = false;
 let retryAt = 0;
+
+// 1 回の自動送信で扱う上限。超過分は次回のインターバルで送る。
+const AUTO_SEND_LIMIT = 10000;
 
 function isEnabled() {
   const row = db.prepare("SELECT value FROM settings WHERE key = 'webhook_enabled'").get();
@@ -228,40 +231,18 @@ async function sendSelected(ids) {
   return { sent, requested: records.length };
 }
 
-// 自動送信の判定
+// 定期送信: 未送信を 1 つの Webhook にまとめて送る
 async function tick() {
   if (!config.webhookUrl) return;
   if (!isEnabled()) return;
   if (sending || Date.now() < retryAt) return;
+  if (pendingCount() === 0) return;
 
-  const session = getOpenSession();
-  if (!session) return;
-
-  const total = pendingCount();
-  if (total === 0) return;
-
-  if (total >= config.webhookBatchSize) {
-    sending = true;
-    try {
-      await sendOneBatch('auto');
-    } finally {
-      sending = false;
-    }
-    return;
-  }
-
-  const last = db
-    .prepare(
-      'SELECT MAX(received_at) AS m FROM attendance WHERE webhook_sent = 0 AND deleted = 0 AND session_id = ?'
-    )
-    .get(session.id).m;
-  if (last && Date.now() - Date.parse(last) >= config.webhookIdleMs) {
-    sending = true;
-    try {
-      await sendOneBatch('auto');
-    } finally {
-      sending = false;
-    }
+  sending = true;
+  try {
+    await sendOneBatch('auto', getUnsent(AUTO_SEND_LIMIT));
+  } finally {
+    sending = false;
   }
 }
 
@@ -271,14 +252,15 @@ function status() {
     urlConfigured: Boolean(config.webhookUrl),
     pending: pendingCount(),
     batchSize: config.webhookBatchSize,
-    idleMs: config.webhookIdleMs,
+    intervalMs: config.webhookIntervalMs,
     lastSentAt: lastResult.lastSentAt,
     lastError: lastResult.lastError
   };
 }
 
 function start() {
-  setInterval(() => tick().catch(() => {}), 1000).unref();
+  console.log(`[info] Webhook 自動送信間隔: ${Math.round(config.webhookIntervalMs / 1000)} 秒`);
+  setInterval(() => tick().catch(() => {}), config.webhookIntervalMs).unref();
 }
 
 module.exports = { start, isEnabled, setEnabled, pendingCount, flushAll, status, tick, getLogs, recordLog, sendSelected };

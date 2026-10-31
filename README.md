@@ -10,7 +10,7 @@ Windows 端末からサーバへ同期、ブラウザでリアルタイムに点
                                                  v
                                         [ブラウザ: 状況 / 管理画面]
                     |
-                    +-- Webhook --> Power Automate --> Teams Chat
+                    +-- Webhook --> Power Automate --> メール (BCC)
 ```
 
 - **クライアント**: C# / .NET 10 (WPF)、ローカル SQLite に未送信キューを保持
@@ -30,7 +30,7 @@ BarcodeTenko5/
 │  │  ├─ auth.js               クライアントトークン / 管理Cookie認証
 │  │  ├─ events.js             SSE ハブ
 │  │  ├─ summary.js            集計
-│  │  ├─ webhook.js            Power Automate 転送キュー
+│  │  ├─ webhook.js            Power Automate 定期送信
 │  │  └─ routes/               public.js, admin.js
 │  ├─ public/                  ダッシュボード / 管理画面 (HTML+JS)
 │  └─ .env.example
@@ -76,6 +76,8 @@ npm start
 | `DASHBOARD_TOKEN` | 設定するとダッシュボードに `?token=xxx` が必要 |
 | `WEBHOOK_URL` | Power Automate の HTTP トリガー URL(空なら転送しない) |
 | `WEBHOOK_SECRET` | Webhook に付ける共有シークレット(任意) |
+| `WEBHOOK_INTERVAL_MS` | 自動送信の間隔(既定 300000 = 5分) |
+| `WEBHOOK_BATCH_SIZE` | 手動送信時の1回あたり件数(既定 10) |
 
 ### 管理画面の使い方
 
@@ -117,7 +119,7 @@ systemd ユニットと Caddyfile のひな形は [`deploy/`](deploy/) にあり
 
 ### Teams Webhook 連携 (無料ワークフロー対応)
 
-`WEBHOOK_URL` に Power Automate の Teams Webhook トリガー（「Teams webhook 要求を受信したとき」）の URL を設定すると、受付した点呼データをバッチ（複数件まとめ）で送信します。ペイロードは最小 JSON（`records` 配列に学籍番号 `student_number`・点呼完了場所 `location`・スキャン時刻 `scan_time`）で、Power Automate 側で Apply to each を使って Teams チャットやチャネルへ個別に投稿できます。
+`WEBHOOK_URL` に Power Automate の Teams Webhook トリガー（「Teams webhook 要求を受信したとき」）の URL を設定すると、`WEBHOOK_INTERVAL_MS`（既定 5 分）ごとに未送信の点呼データを 1 リクエストにまとめて送信します。ペイロードは最小 JSON（`records` 配列に学籍番号 `student_number`・点呼完了場所 `location`・スキャン時刻 `scan_time`）で、Power Automate 側で 1 通のメール本文を組み立て、受信者を BCC に入れて一括送信できます（1 実行 = 1 通）。
 
 設定手順の詳細は [TEAMS_WEBHOOK_GUIDE.md](TEAMS_WEBHOOK_GUIDE.md) を参照してください。
 

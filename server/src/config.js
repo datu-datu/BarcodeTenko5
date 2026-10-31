@@ -8,6 +8,11 @@ function resolveFromRoot(p) {
   return path.isAbsolute(p) ? p : path.join(__dirname, '..', p);
 }
 
+function intFromEnv(name, fallback) {
+  const n = Number.parseInt(process.env[name] || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 const config = {
   port: Number.parseInt(process.env.PORT || '8080', 10),
   dbPath: resolveFromRoot(process.env.DB_PATH || './data/tenko.db'),
@@ -17,8 +22,8 @@ const config = {
   dashboardToken: process.env.DASHBOARD_TOKEN || '',
   webhookUrl: process.env.WEBHOOK_URL || '',
   webhookSecret: process.env.WEBHOOK_SECRET || '',
-  webhookBatchSize: Number.parseInt(process.env.WEBHOOK_BATCH_SIZE || '10', 10),
-  webhookIdleMs: Number.parseInt(process.env.WEBHOOK_IDLE_MS || '10000', 10)
+  webhookBatchSize: intFromEnv('WEBHOOK_BATCH_SIZE', 10),
+  webhookIntervalMs: intFromEnv('WEBHOOK_INTERVAL_MS', 300000)
 };
 
 module.exports = config;

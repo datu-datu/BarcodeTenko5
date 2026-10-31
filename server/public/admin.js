@@ -517,10 +517,12 @@
       ? 'Webhook URL: 設定済み'
       : 'Webhook URL: 未設定 (.env の WEBHOOK_URL)';
     el('webhookPending').textContent = `未送信: ${w.pending} 件`;
+    const intervalSec = Math.round(w.intervalMs / 1000);
+    const intervalText = intervalSec >= 60 ? `${Math.round(intervalSec / 60)}分` : `${intervalSec}秒`;
     el('webhookInfo').textContent =
       `最終送信: ${w.lastSentAt ? fmtTime(w.lastSentAt) : '—'}` +
       (w.lastError ? ` / エラー: ${w.lastError}` : '') +
-      ` (${w.batchSize}件または${Math.round(w.idleMs / 1000)}秒経過でまとめ送信)`;
+      ` (${intervalText}ごとにまとめ送信)`;
     await loadWebhookLogs();
   }
 
